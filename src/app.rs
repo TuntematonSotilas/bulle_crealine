@@ -21,16 +21,16 @@ pub fn App() -> impl IntoView {
     view! {
         // injects a stylesheet into the document <head>
         // id=leptos means cargo-leptos will hot-reload this stylesheet
-        <Stylesheet id="leptos" href="/pkg/atelier_crealine.css"/>
+        <Stylesheet id="leptos" href="/pkg/bulle_crealine.css"/>
 
         // sets the document title
-        <Title text="Atelier Créaline"/>
+        <Title text="Bulle Créaline"/>
 
-        <Meta property="og:title" content="Atelier Créaline" />
-        <Meta property="og:url" content="https://atelier-crealine.onrender.com" />
-        <Meta property="og:image" content="https://atelier-crealine.onrender.com/assets/meta.png" />
+        <Meta property="og:title" content="Bulle Créaline" />
+        <Meta property="og:url" content="https://bulle-crealine.onrender.com" />
+        <Meta property="og:image" content="https://bulle-crealine.onrender.com/assets/meta.png" />
         <Meta property="og:description" content="Médiation artistique en relation d'aide." />
-        <Meta property="og:site_name" content="Atelier Créaline" />
+        <Meta property="og:site_name" content="Bulle Créaline" />
         <Meta property="og:type" content="website" />
 
         // content for this welcome page

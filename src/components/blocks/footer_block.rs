@@ -11,7 +11,7 @@ pub fn FooterBlock() -> impl IntoView {
                 <FooterBrandLink class="mx-auto" attr:aria-label="go home" attr:href="/">
                     <div class="flex items-center gap-2">
                         <img src="/assets/icon.svg" alt="Logo" class="w-8 h-8"/>
-                        Atelier Créaline
+                        Bulle Créaline
                     </div>
                 </FooterBrandLink>
                 <FooterNavContainer>

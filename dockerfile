@@ -21,7 +21,7 @@ FROM rust:1.95.0-alpine3.22 AS runner
 
 WORKDIR /app
 
-COPY --from=builder /work/target/release/atelier_crealine /app/
+COPY --from=builder /work/target/release/bulle_crealine /app/
 COPY --from=builder /work/target/site /app/site
 COPY --from=builder /work/Cargo.toml /app/
 
@@ -30,4 +30,4 @@ ENV LEPTOS_SITE_ADDR="0.0.0.0:8080"
 ENV LEPTOS_SITE_ROOT=./site
 EXPOSE 8080
 
-CMD ["/app/atelier_crealine"]
+CMD ["/app/bulle_crealine"]

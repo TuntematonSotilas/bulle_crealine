@@ -1,8 +1,8 @@
-# atelier_crealine
+# bulle_crealine
 
-Atelier Crealine
+Bulle Crealine
 
-Live here : https://atelier-crealine.onrender.com
+Live here : https://bulle-crealine.onrender.com
 
 ## Setup
  
@@ -23,8 +23,8 @@ Live here : https://atelier-crealine.onrender.com
     
 ## Docker
 
-* Build : `docker build . -t atelier_crealine`
-* Run : `docker run -p 3000:8080 atelier_crealine`
+* Build : `docker build . -t bulle_crealine`
+* Run : `docker run -p 3000:8080 bulle_crealine`
 * Test : http://localhost:3000
 
 

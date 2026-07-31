@@ -51,7 +51,7 @@ pub fn HomePage() -> impl IntoView {
 
     view! {
         <div class="home-hero border border-(--border) rounded-[2rem] shadow-(--shadow) max-w-4xl mx-auto">
-            <h3 class="home-hero-title">"Atelier Créaline"</h3>
+            <h3 class="home-hero-title">"Bulle Créaline"</h3>
             <h1 class="home-hero-subtitle">"Médiation artistique en relation d'aide."</h1>
             <h2 class="home-hero-words">
                 <span class="home-hero-word">"Créer"</span>

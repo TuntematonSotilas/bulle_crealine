@@ -26,7 +26,7 @@ pub fn AteliersParentsEnfants() -> impl IntoView {
         },
     ];
     let schedule = "Chaque premier mercredi du mois, de 10h à 12h";
-    let place = "Atelier Créaline, 5 Rue Marc Seguin, 42110 Feurs";
+    let place = "Bulle Créaline, 5 Rue Marc Seguin, 42110 Feurs";
     let age = "De 0 à 13 ans";
     let place_link = "https://maps.app.goo.gl/Fgmpg9RF8HiPGrkf7";
     let steps = vec![

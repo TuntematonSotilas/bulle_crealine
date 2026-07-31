@@ -8,7 +8,7 @@ pub fn AteliersCreatifsPourTous() -> impl IntoView {
     let title = "Ateliers créatifs pour tous";
     let desc = "Découvrez nos ateliers créatifs conçus pour tous les âges et tous les niveaux.";
     let schedule = "Tous les dimanches, de 14h à 17h";
-    let place = "Atelier Créaline, 5 Rue Marc Seguin, 42110 Feurs";
+    let place = "Bulle Créaline, 5 Rue Marc Seguin, 42110 Feurs";
     let age = "À partir de 13 ans";
     let place_link = "https://maps.app.goo.gl/Fgmpg9RF8HiPGrkf7";
     let steps = vec![
