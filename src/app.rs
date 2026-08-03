@@ -48,6 +48,8 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/qui-suis-je") view=QuiSuisJePage/>
                     <Route path=path!("/mentions-legales") view=MentionsLegales/>
                     <Route path=path!("/newsletter") view=NewsletterPage/>
+                    <Route path=path!("/admin") view=AdminPage/>
+                    <Route path=path!("/admin/login") view=AdminLoginPage/>
                     <Route path=WildcardSegment("any") view=NotFound/>
                 </Routes>
             </main>

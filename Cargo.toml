@@ -9,6 +9,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 actix-files = { version = "0.6.10", optional = true, default-features = false }
 actix-web = { version = "4.13.0", optional = true, default-features = false, features = ["macros", "compress-gzip", "compress-zstd"] }
+# `std` tire rand_core/getrandom, nécessaire pour générer un sel.
+argon2 = { version = "0.5.3", optional = true, features = ["std"] }
+base64 = { version = "0.22.1", optional = true }
+hmac = { version = "0.12.1", optional = true }
+sha2 = { version = "0.10.9", optional = true }
 console_error_panic_hook = "0.1"
 leptos = { version = "0.8.7" }
 leptos_meta = { version = "0.8.6" }
@@ -28,10 +33,19 @@ ssr = [
   "dep:actix-files",
   "dep:actix-web",
   "dep:leptos_actix",
+  "dep:argon2",
+  "dep:base64",
+  "dep:hmac",
+  "dep:sha2",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
 ]
+
+# Génère ADMIN_PASSWORD_HASH et ADMIN_SESSION_SECRET (voir README).
+[[example]]
+name = "hash_password"
+required-features = ["ssr"]
 
 # Defines a size-optimized profile for the WASM bundle in release mode
 [profile.wasm-release]

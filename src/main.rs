@@ -8,9 +8,20 @@ async fn main() -> std::io::Result<()> {
     use leptos_meta::MetaTags;
     use leptos_actix::{generate_route_list, LeptosRoutes};
     use bulle_crealine::app::*;
+    use bulle_crealine::auth::{config::AdminConfig, middleware::admin_guard};
 
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
+
+    // L'administration est facultative : sans configuration valable, le site
+    // public démarre normalement et `/admin` reste simplement inaccessible.
+    match AdminConfig::init() {
+        Ok(config) => println!("administration activée pour {}", config.email),
+        Err(error) => eprintln!(
+            "administration désactivée : {error}\n  \
+             renseignez ADMIN_EMAIL, ADMIN_PASSWORD_HASH et ADMIN_SESSION_SECRET pour l'activer"
+        ),
+    }
 
     HttpServer::new(move || {
         // Generate the list of routes in your Leptos App
@@ -21,6 +32,8 @@ async fn main() -> std::io::Result<()> {
         println!("listening on http://{}", &addr);
 
         App::new()
+            // refuse les pages /admin non authentifiées avant tout rendu
+            .wrap(middleware::from_fn(admin_guard))
             // serve JS/WASM/CSS from `pkg`
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
             // serve other assets from the `assets` directory
