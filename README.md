@@ -39,15 +39,11 @@ Les deux dernières se génèrent d'un coup :
 
     cargo run --example hash_password --features ssr -- "<mot de passe>"
 
-En local (PowerShell) :
+En local (.bashrc) :
 
-    $env:ADMIN_EMAIL = "vous@exemple.fr"
-    $env:ADMIN_PASSWORD_HASH = '<hash>'
-    $env:ADMIN_SESSION_SECRET = "<secret>"
-    cargo leptos watch
-
-Guillemets simples pour le hash : il contient des `$` que PowerShell
-interpréterait.
+    export ADMIN_EMAIL="vous@exemple.fr"
+    export ADMIN_PASSWORD_HASH="<hash>"
+    export ADMIN_SESSION_SECRET="<secret>"
 
 ### Fonctionnement
 

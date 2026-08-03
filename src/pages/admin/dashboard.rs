@@ -62,9 +62,6 @@ fn AdminHome(email: String) -> impl IntoView {
                 </CardHeader>
                 <CardContent>
                     <p class="text-sm text-muted-foreground">
-                        "Les server functions ajoutées ici doivent commencer par un appel à "
-                        <code class="px-1 py-0.5 rounded bg-muted">"require_admin()"</code>
-                        " : le garde-fou des pages ne couvre pas les appels d'API."
                     </p>
                 </CardContent>
             </Card>
