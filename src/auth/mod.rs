@@ -1,18 +1,17 @@
-//! Authentification de l'espace d'administration.
+//! Authentication of the admin area.
 //!
-//! Le site n'a qu'un seul administrateur, dont les identifiants sont fournis par
-//! l'environnement ([`config::AdminConfig`]) : il n'y a donc ni inscription, ni
-//! table d'utilisateurs, ni base de données à interroger.
+//! The site has a single administrator, whose credentials come from the
+//! environment ([`config::AdminConfig`]): there is no sign-up, no user table and
+//! no database to query.
 //!
-//! La connexion vérifie le mot de passe avec Argon2 puis dépose un cookie signé
-//! ([`session`]). Ce cookie est ensuite revérifié à chaque requête, de deux
-//! façons complémentaires :
+//! Logging in checks the password with Argon2, then drops a signed cookie
+//! ([`session`]). That cookie is re-checked on every request, in two
+//! complementary ways:
 //!
-//! - [`middleware::admin_guard`] refuse les pages `/admin/*` avant même que
-//!   Leptos ne les rende ;
-//! - [`require_admin`] doit ouvrir toute server function réservée à
-//!   l'administration, car les appels `/api/*` ne passent pas par le garde-fou
-//!   ci-dessus.
+//! - [`middleware::admin_guard`] turns away `/admin/*` pages before Leptos even
+//!   renders them;
+//! - [`require_admin`] must open every server function reserved for the admin,
+//!   because `/api/*` calls do not go through the guard above.
 
 use leptos::prelude::*;
 
@@ -25,23 +24,23 @@ pub mod session;
 #[cfg(feature = "ssr")]
 pub mod throttle;
 
-/// Message affiché quand l'échec ne doit rien révéler de sa cause.
+/// Message shown when a failure must not reveal anything about its cause.
 const GENERIC_FAILURE: &str = "La connexion a échoué. Réessayez.";
 
-/// Chemin de la page de connexion, seule page `/admin` ouverte à tous.
+/// Path of the login page, the only `/admin` page open to everyone.
 pub const LOGIN_PATH: &str = "/admin/login";
 
-/// Chemin de l'accueil de l'administration.
+/// Path of the admin home page.
 pub const ADMIN_PATH: &str = "/admin";
 
-/// Ouvre une session d'administration et redirige vers `/admin`.
+/// Grants admin access and redirects to `/admin`.
 #[server]
 pub async fn login(email: String, password: String) -> Result<(), ServerFnError> {
     use actix_web::http::header::{HeaderValue, SET_COOKIE};
 
-    // Aucun `await` dans ce corps : la requête Actix est exposée à Leptos via un
-    // `SendWrapper` lié au fil d'exécution courant, et la franchir ferait
-    // paniquer les accès suivants.
+    // No `await` in this body: the Actix request is exposed to Leptos through a
+    // `SendWrapper` tied to the current thread, and crossing one would make the
+    // accesses that follow panic.
     let request = expect_context::<leptos_actix::Request>();
     let response = expect_context::<leptos_actix::ResponseOptions>();
     let connection = request.connection_info();
@@ -50,11 +49,11 @@ pub async fn login(email: String, password: String) -> Result<(), ServerFnError>
         ServerFnError::new("L'administration n'est pas configurée sur ce serveur.")
     })?;
 
-    // L'adresse d'origine est lue dans les en-têtes du proxy, donc falsifiable :
-    // le compteur décourage une attaque naïve mais ne résiste pas à quelqu'un qui
-    // fait tourner l'adresse annoncée. C'est bien Argon2, et lui seul, qui rend le
-    // mot de passe coûteux à deviner ; l'usurpation permet en outre de bloquer
-    // l'accès du véritable administrateur pendant la durée d'un blocage.
+    // The origin address is read from the proxy headers, so it can be forged: the
+    // counter discourages a naive attack but does not hold up against someone
+    // rotating the address they announce. It is Argon2, and Argon2 alone, that
+    // makes the password expensive to guess; forging the address also lets an
+    // attacker lock the real administrator out for the length of a lockout.
     let ip = connection.realip_remote_addr().unwrap_or("inconnue");
 
     if let Err(remaining) = throttle::check(ip) {
@@ -64,10 +63,10 @@ pub async fn login(email: String, password: String) -> Result<(), ServerFnError>
         )));
     }
 
-    // Le mot de passe est vérifié même lorsque l'adresse ne correspond pas, afin
-    // que le temps de réponse ne permette pas de deviner l'adresse attendue.
-    // Argon2 est volontairement coûteux ; c'est le compteur ci-dessus qui borne
-    // le nombre de vérifications qu'un visiteur peut déclencher.
+    // The password is checked even when the address does not match, so that the
+    // response time gives no way to guess the expected address. Argon2 is
+    // deliberately costly; it is the counter above that bounds how many checks a
+    // visitor can trigger.
     let email_matches = email.trim().to_lowercase() == config.email;
     let password_matches = session::verify_password(&password, &config.password_hash);
 
@@ -82,14 +81,14 @@ pub async fn login(email: String, password: String) -> Result<(), ServerFnError>
     let cookie = HeaderValue::from_str(&cookie).map_err(|_| ServerFnError::new(GENERIC_FAILURE))?;
     response.append_header(SET_COOKIE, cookie);
 
-    // `SameSite=Lax` empêche le navigateur d'envoyer ce cookie sur une requête
-    // POST venant d'un autre site : la falsification de requête est écartée sans
-    // jeton anti-CSRF supplémentaire.
+    // `SameSite=Lax` keeps the browser from sending this cookie on a POST coming
+    // from another site: request forgery is ruled out without an extra CSRF
+    // token.
     leptos_actix::redirect(ADMIN_PATH);
     Ok(())
 }
 
-/// Efface le cookie d'administration et renvoie vers la page de connexion.
+/// Clears the admin cookie and sends the visitor back to the login page.
 #[server]
 pub async fn logout() -> Result<(), ServerFnError> {
     use actix_web::http::header::{HeaderValue, SET_COOKIE};
@@ -106,19 +105,19 @@ pub async fn logout() -> Result<(), ServerFnError> {
     Ok(())
 }
 
-/// Adresse de l'administrateur connecté, ou `None` si la requête n'est pas
-/// authentifiée.
+/// Address of the logged-in admin, or `None` when the request is not
+/// authenticated.
 ///
-/// Sert au rendu côté client, quand la navigation interne de Leptos n'est pas
-/// passée par [`middleware::admin_guard`]. Ce n'est pas une barrière de
-/// sécurité : les données sensibles doivent être protégées par [`require_admin`]
-/// dans la server function qui les expose.
+/// Used for client-side rendering, when Leptos's in-app navigation has not gone
+/// through [`middleware::admin_guard`]. This is not a security barrier: sensitive
+/// data must be protected by [`require_admin`] inside the server function that
+/// exposes it.
 #[server]
 pub async fn admin_email() -> Result<Option<String>, ServerFnError> {
     Ok(current_admin())
 }
 
-/// Adresse de l'administrateur authentifié par la requête courante.
+/// Address of the admin authenticated by the current request.
 #[cfg(feature = "ssr")]
 pub fn current_admin() -> Option<String> {
     use actix_web::http::header::COOKIE;
@@ -128,18 +127,18 @@ pub fn current_admin() -> Option<String> {
     session::authenticated_email(Some(cookie_header))
 }
 
-/// Exige une requête authentifiée, à placer en tête de toute server function
-/// réservée à l'administration.
+/// Requires an authenticated request; belongs at the top of every server function
+/// reserved for the admin.
 ///
-/// Renvoie l'adresse de l'administrateur, pour journalisation ou attribution.
+/// Returns the admin's address, for logging or attribution.
 #[cfg(feature = "ssr")]
 pub fn require_admin() -> Result<String, ServerFnError> {
     current_admin().ok_or_else(|| ServerFnError::new("Accès réservé à l'administration."))
 }
 
-/// Calcule le hash Argon2 d'un mot de passe, au format PHC.
+/// Computes the Argon2 hash of a password, in PHC format.
 ///
-/// Utilisé par `examples/hash_password.rs` pour produire la valeur à placer dans
+/// Used by `examples/hash_password.rs` to produce the value that goes into
 /// `ADMIN_PASSWORD_HASH`.
 #[cfg(feature = "ssr")]
 pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
@@ -152,11 +151,11 @@ pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Er
         .to_string())
 }
 
-/// Traduit une erreur de server function en message affichable.
+/// Turns a server function error into something displayable.
 ///
-/// Seuls les messages que nous avons rédigés sont repris tels quels ; tout le
-/// reste (panne réseau, erreur de sérialisation…) est remplacé par un message
-/// générique, pour ne pas exposer d'interne au visiteur.
+/// Only the messages we wrote ourselves are passed through as they are;
+/// everything else (network failure, serialization error…) is replaced by a
+/// generic message, so as not to expose internals to the visitor.
 pub fn user_message(error: &ServerFnError) -> String {
     match error {
         ServerFnError::ServerError(message) => message.clone(),

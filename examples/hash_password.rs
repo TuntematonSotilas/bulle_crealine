@@ -1,12 +1,11 @@
-//! Génère les valeurs à placer dans les variables d'environnement de
-//! l'administration.
+//! Generates the values to put into the admin environment variables.
 //!
 //! ```text
-//! cargo run --example hash_password --features ssr -- "mon mot de passe"
+//! cargo run --example hash_password --features ssr -- "my password"
 //! ```
 //!
-//! Le mot de passe n'est jamais réaffiché : seul son hash Argon2 l'est, et c'est
-//! ce hash qui va dans `ADMIN_PASSWORD_HASH`.
+//! The password is never echoed back: only its Argon2 hash is, and that hash is
+//! what goes into `ADMIN_PASSWORD_HASH`.
 
 use std::env;
 
@@ -44,7 +43,7 @@ fn main() {
     println!("d'environnement du serveur. Ne les versionnez pas.");
 }
 
-/// Tire un secret de signature de 64 caractères hexadécimaux (256 bits).
+/// Draws a signing secret of 64 hex characters (256 bits).
 fn random_secret() -> String {
     use argon2::password_hash::rand_core::{OsRng, RngCore};
 

@@ -13,8 +13,8 @@ async fn main() -> std::io::Result<()> {
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
 
-    // L'administration est facultative : sans configuration valable, le site
-    // public démarre normalement et `/admin` reste simplement inaccessible.
+    // The admin area is optional: without a usable configuration, the public site
+    // starts as usual and `/admin` simply stays out of reach.
     match AdminConfig::init() {
         Ok(config) => println!("administration activée pour {}", config.email),
         Err(error) => eprintln!(
@@ -32,7 +32,7 @@ async fn main() -> std::io::Result<()> {
         println!("listening on http://{}", &addr);
 
         App::new()
-            // refuse les pages /admin non authentifiées avant tout rendu
+            // turn away unauthenticated /admin pages before any rendering
             .wrap(middleware::from_fn(admin_guard))
             // serve JS/WASM/CSS from `pkg`
             .service(Files::new("/pkg", format!("{site_root}/pkg")))

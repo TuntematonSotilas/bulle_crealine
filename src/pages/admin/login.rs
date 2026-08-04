@@ -7,15 +7,14 @@ use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader
 use crate::components::ui::input::{Input, InputType};
 use crate::components::ui::label::Label;
 
-/// Page de connexion à l'espace d'administration.
+/// Login page of the admin area.
 #[component]
 pub fn AdminLoginPage() -> impl IntoView {
     let login = ServerAction::<Login>::new();
     let pending = login.pending();
 
-    // `ActionForm` soumet le formulaire nativement quand le WASM n'est pas
-    // chargé : la connexion reste possible, le serveur répondant alors par une
-    // redirection HTTP classique.
+    // `ActionForm` submits natively when the WASM bundle has not loaded: logging
+    // in still works, the server answering with a plain HTTP redirect.
     let error = move || {
         login
             .value()

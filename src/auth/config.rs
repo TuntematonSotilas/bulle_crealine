@@ -2,34 +2,34 @@ use std::env;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-/// Durée de vie d'une session.
+/// How long a granted access stays valid.
 ///
-/// Volontairement courte : le cookie est auto-porteur (aucun état côté serveur),
-/// donc une session émise ne peut pas être révoquée avant son expiration.
+/// Deliberately short: the cookie is self-contained (no server-side state), so a
+/// cookie that has been handed out cannot be revoked before it expires.
 pub const SESSION_TTL: Duration = Duration::from_secs(8 * 60 * 60);
 
-/// Longueur minimale acceptée pour le secret de signature.
+/// Shortest signing secret we accept.
 const MIN_SECRET_LEN: usize = 32;
 
 static CONFIG: OnceLock<AdminConfig> = OnceLock::new();
 
-/// Identifiants de l'unique compte d'administration, lus dans l'environnement.
+/// Credentials of the one and only admin account, read from the environment.
 #[derive(Debug)]
 pub struct AdminConfig {
-    /// Adresse acceptée à la connexion.
+    /// The address accepted at login.
     pub email: String,
-    /// Hash Argon2 du mot de passe, au format PHC.
+    /// Argon2 hash of the password, in PHC format.
     pub password_hash: String,
-    /// Clé HMAC utilisée pour signer les cookies de session.
+    /// HMAC key used to sign access cookies.
     pub secret: Vec<u8>,
 }
 
-/// Raison pour laquelle l'administration n'a pas pu être configurée.
+/// Why the admin area could not be configured.
 #[derive(Debug)]
 pub enum ConfigError {
-    /// Une variable d'environnement obligatoire est absente ou vide.
+    /// A required environment variable is missing or empty.
     Missing(&'static str),
-    /// `ADMIN_SESSION_SECRET` est trop court pour servir de clé HMAC.
+    /// `ADMIN_SESSION_SECRET` is too short to act as an HMAC key.
     SecretTooShort { len: usize },
 }
 
@@ -50,18 +50,18 @@ impl std::fmt::Display for ConfigError {
 impl std::error::Error for ConfigError {}
 
 impl AdminConfig {
-    /// Lit et valide la configuration, puis la mémorise pour les appels suivants.
+    /// Reads and validates the configuration, then memoizes it for later calls.
     ///
-    /// À appeler au démarrage du serveur afin que l'exploitant voie tout de suite
-    /// une éventuelle configuration incomplète. Un second appel ne relit pas
-    /// l'environnement et renvoie la configuration déjà validée.
+    /// Meant to be called when the server starts, so that an incomplete
+    /// configuration is reported right away. A second call does not re-read the
+    /// environment and returns the configuration already validated.
     pub fn init() -> Result<&'static Self, ConfigError> {
         if let Some(existing) = CONFIG.get() {
             return Ok(existing);
         }
 
-        // Les valeurs sont systématiquement rognées : un retour à la ligne collé
-        // par erreur dans un panneau d'hébergeur rendrait le hash illisible.
+        // Values are always trimmed: a newline pasted by accident into a hosting
+        // provider's dashboard would make the hash unreadable.
         let email = required("ADMIN_EMAIL")?.trim().to_lowercase();
         let password_hash = required("ADMIN_PASSWORD_HASH")?.trim().to_owned();
         let secret = required("ADMIN_SESSION_SECRET")?.trim().to_owned();
@@ -76,13 +76,13 @@ impl AdminConfig {
             secret: secret.into_bytes(),
         };
 
-        // `init` n'est appelé qu'au démarrage : en cas de course, la première
-        // valeur écrite fait foi et les deux sont équivalentes.
+        // `init` only runs at startup: should two calls race, the first value
+        // written wins and both are equivalent anyway.
         Ok(CONFIG.get_or_init(|| config))
     }
 
-    /// Configuration validée au démarrage, ou `None` si l'administration est
-    /// désactivée faute de configuration valable.
+    /// The configuration validated at startup, or `None` when the admin area is
+    /// disabled for lack of a usable configuration.
     pub fn get() -> Option<&'static Self> {
         CONFIG.get()
     }

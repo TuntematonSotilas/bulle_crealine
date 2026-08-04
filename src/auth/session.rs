@@ -1,13 +1,12 @@
-//! Jeton d'administration porté par un cookie signé.
+//! Admin access carried by a signed cookie.
 //!
-//! Aucun état n'est conservé côté serveur : le cookie contient lui-même
-//! l'adresse de l'administrateur et sa date d'expiration, scellées par un HMAC
-//! SHA-256. Chaque requête est donc authentifiée de bout en bout sans base de
-//! données ni table de sessions à entretenir.
+//! No state is kept on the server: the cookie itself holds the admin's address
+//! and its expiry date, sealed with an HMAC-SHA256. Every request is therefore
+//! authenticated end to end, with no database and no session table to maintain.
 //!
-//! La contrepartie de ce format auto-porté est qu'un cookie émis ne peut pas
-//! être invalidé à distance avant son expiration, d'où la durée de vie courte
-//! fixée par [`SESSION_TTL`].
+//! The price of this self-contained format is that a cookie cannot be
+//! invalidated remotely before it expires, hence the short lifetime set by
+//! [`SESSION_TTL`].
 
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use base64::Engine;
@@ -20,16 +19,16 @@ use crate::auth::config::{AdminConfig, SESSION_TTL};
 
 type HmacSha256 = Hmac<Sha256>;
 
-/// Nom du cookie portant le jeton.
+/// Name of the cookie carrying the token.
 pub const COOKIE_NAME: &str = "bc_admin";
 
-/// Version du format de charge utile, pour pouvoir le faire évoluer plus tard.
+/// Payload format version, so it can be evolved later on.
 const PAYLOAD_VERSION: &str = "v1";
 
-/// Vérifie un mot de passe contre un hash Argon2 au format PHC.
+/// Checks a password against an Argon2 hash in PHC format.
 ///
-/// Renvoie `false` sur un hash illisible plutôt que de propager l'erreur : une
-/// configuration invalide ne doit jamais laisser passer une connexion.
+/// Returns `false` on an unreadable hash rather than propagating the error: an
+/// invalid configuration must never let a login through.
 pub fn verify_password(password: &str, phc_hash: &str) -> bool {
     match PasswordHash::new(phc_hash) {
         Ok(parsed) => Argon2::default()
@@ -39,10 +38,10 @@ pub fn verify_password(password: &str, phc_hash: &str) -> bool {
     }
 }
 
-/// Construit l'en-tête `Set-Cookie` accordant l'accès à l'administration.
+/// Builds the `Set-Cookie` header granting access to the admin area.
 ///
-/// `secure` doit refléter le schéma de la requête en cours : le drapeau
-/// `Secure` empêcherait le cookie de fonctionner en HTTP sur localhost.
+/// `secure` must mirror the scheme of the request being served: the `Secure`
+/// flag would stop the cookie from working over HTTP on localhost.
 pub fn grant_cookie(config: &AdminConfig, secure: bool) -> String {
     let expires_at = now_unix() + SESSION_TTL.as_secs();
     let value = sign(&config.secret, &config.email, expires_at);
@@ -53,7 +52,7 @@ pub fn grant_cookie(config: &AdminConfig, secure: bool) -> String {
     )
 }
 
-/// Construit l'en-tête `Set-Cookie` effaçant le jeton côté navigateur.
+/// Builds the `Set-Cookie` header clearing the token from the browser.
 pub fn revoke_cookie(secure: bool) -> String {
     format!(
         "{COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{}",
@@ -61,11 +60,11 @@ pub fn revoke_cookie(secure: bool) -> String {
     )
 }
 
-/// Renvoie l'adresse de l'administrateur authentifié par l'en-tête `Cookie`.
+/// Returns the address of the admin authenticated by the `Cookie` header.
 ///
-/// Renvoie `None` si le cookie est absent, altéré, expiré, ou si l'adresse
-/// qu'il porte n'est plus celle configurée — ce dernier cas révoque d'un coup
-/// tous les jetons en circulation lorsque `ADMIN_EMAIL` change.
+/// Returns `None` when the cookie is absent, tampered with, expired, or when the
+/// address it carries is no longer the configured one — that last case revokes
+/// every token in circulation at once whenever `ADMIN_EMAIL` changes.
 pub fn authenticated_email(cookie_header: Option<&str>) -> Option<String> {
     let config = AdminConfig::get()?;
     let value = cookie_value(cookie_header?, COOKIE_NAME)?;
@@ -73,20 +72,20 @@ pub fn authenticated_email(cookie_header: Option<&str>) -> Option<String> {
     (email == config.email).then_some(email)
 }
 
-/// Scelle `email` et `expires_at` en une valeur de cookie `<charge>.<signature>`.
+/// Seals `email` and `expires_at` into a `<payload>.<signature>` cookie value.
 fn sign(secret: &[u8], email: &str, expires_at: u64) -> String {
     let payload = B64.encode(format!("{PAYLOAD_VERSION}|{expires_at}|{email}"));
     let signature = B64.encode(mac(secret, payload.as_bytes()));
     format!("{payload}.{signature}")
 }
 
-/// Contrôle la signature et l'expiration d'une valeur de cookie, et en extrait
-/// l'adresse.
+/// Checks the signature and expiry of a cookie value, and extracts the address
+/// from it.
 fn verify(secret: &[u8], value: &str) -> Option<String> {
     let (payload, signature) = value.split_once('.')?;
 
-    // `verify_slice` compare en temps constant, ce qui évite de transformer la
-    // vérification en oracle sur les octets de la signature.
+    // `verify_slice` compares in constant time, which keeps the check from
+    // becoming an oracle on the bytes of the signature.
     let mut hmac = HmacSha256::new_from_slice(secret).ok()?;
     hmac.update(payload.as_bytes());
     hmac.verify_slice(&B64.decode(signature).ok()?).ok()?;
@@ -102,15 +101,15 @@ fn verify(secret: &[u8], value: &str) -> Option<String> {
 
 fn mac(secret: &[u8], message: &[u8]) -> Vec<u8> {
     let mut hmac =
-        HmacSha256::new_from_slice(secret).expect("HmacSha256 accepte une clé de toute longueur");
+        HmacSha256::new_from_slice(secret).expect("HmacSha256 takes a key of any length");
     hmac.update(message);
     hmac.finalize().into_bytes().to_vec()
 }
 
-/// Extrait la valeur d'un cookie d'un en-tête `Cookie` brut.
+/// Extracts one cookie's value from a raw `Cookie` header.
 ///
-/// Évite d'activer la fonctionnalité `cookies` d'actix-web, dont nous n'aurions
-/// besoin que pour cette seule lecture.
+/// Saves us from enabling actix-web's `cookies` feature, which we would need for
+/// this single read alone.
 fn cookie_value<'a>(cookie_header: &'a str, name: &str) -> Option<&'a str> {
     cookie_header.split(';').find_map(|pair| {
         let (key, value) = pair.split_once('=')?;
@@ -188,10 +187,7 @@ mod tests {
         let phc = crate::auth::hash_password("correct horse battery staple").unwrap();
 
         assert!(verify_password("correct horse battery staple", &phc));
-        assert!(!verify_password("mauvais mot de passe", &phc));
-        assert!(!verify_password(
-            "correct horse battery staple",
-            "pas-un-hash-phc"
-        ));
+        assert!(!verify_password("the wrong password", &phc));
+        assert!(!verify_password("correct horse battery staple", "not-a-phc-hash"));
     }
 }

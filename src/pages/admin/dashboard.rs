@@ -7,13 +7,13 @@ use crate::auth::{LOGIN_PATH, Logout, admin_email};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 
-/// Accueil de l'espace d'administration.
+/// Home page of the admin area.
 #[component]
 pub fn AdminPage() -> impl IntoView {
-    // Sur un chargement de page, `admin_guard` a déjà écarté les visiteurs non
-    // authentifiés. Cette ressource couvre la navigation interne de Leptos, qui
-    // ne repasse pas par le serveur : sans elle, une session expirée en cours de
-    // route laisserait la page s'afficher.
+    // On a page load, `admin_guard` has already turned unauthenticated visitors
+    // away. This resource covers Leptos's in-app navigation, which does not go
+    // back to the server: without it, a token expiring mid-session would still
+    // let the page render.
     let session = Resource::new(|| (), |_| async move { admin_email().await });
 
     view! {
@@ -32,7 +32,7 @@ pub fn AdminPage() -> impl IntoView {
     }
 }
 
-/// Contenu de l'administration, une fois l'accès établi.
+/// Admin content, once access has been established.
 #[component]
 fn AdminHome(email: String) -> impl IntoView {
     let logout = ServerAction::<Logout>::new();

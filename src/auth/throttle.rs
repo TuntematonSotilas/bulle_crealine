@@ -1,23 +1,22 @@
-//! Limitation des tentatives de connexion, par adresse IP.
+//! Rate limiting of login attempts, per IP address.
 //!
-//! Argon2 ralentit déjà fortement une attaque par force brute, mais rien
-//! n'empêcherait de la mener en parallèle. Un compteur en mémoire suffit ici :
-//! le site tourne sur une instance unique, et perdre les compteurs à un
-//! redémarrage est sans conséquence puisque le mot de passe reste, lui, hors
-//! d'atteinte.
+//! Argon2 already slows a brute-force attack down considerably, but nothing
+//! would stop it from being run in parallel. An in-memory counter is enough
+//! here: the site runs on a single instance, and losing the counters on a
+//! restart is harmless since the password itself stays out of reach.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-/// Nombre d'échecs consécutifs toléré avant blocage.
+/// How many consecutive failures are tolerated before locking out.
 const MAX_FAILURES: u32 = 5;
 
-/// Durée du blocage, et délai au bout duquel un compteur inactif est oublié.
+/// How long a lockout lasts, and after how long an idle counter is forgotten.
 const LOCKOUT: Duration = Duration::from_secs(15 * 60);
 
-/// Au-delà, on purge les compteurs périmés : sans cela, des requêtes forgeant
-/// l'IP d'origine feraient grossir la table indéfiniment.
+/// Past this size, stale counters are pruned: without it, requests forging their
+/// origin address would grow the table without bound.
 const PRUNE_THRESHOLD: usize = 1024;
 
 static FAILURES: OnceLock<Mutex<HashMap<String, Attempts>>> = OnceLock::new();
@@ -28,16 +27,16 @@ struct Attempts {
     last: Instant,
 }
 
-/// Vérifie qu'`ip` a encore le droit d'essayer.
+/// Checks whether `ip` is still allowed to try.
 ///
-/// Renvoie le temps d'attente restant si le blocage est en cours.
+/// Returns the remaining wait when a lockout is under way.
 pub fn check(ip: &str) -> Result<(), Duration> {
     let mut failures = lock();
     match failures.get(ip) {
         Some(attempts) if attempts.count >= MAX_FAILURES => {
             match LOCKOUT.checked_sub(attempts.last.elapsed()) {
                 Some(remaining) => Err(remaining),
-                // Blocage écoulé : on repart de zéro.
+                // Lockout elapsed: start over from zero.
                 None => {
                     failures.remove(ip);
                     Ok(())
@@ -48,7 +47,7 @@ pub fn check(ip: &str) -> Result<(), Duration> {
     }
 }
 
-/// Comptabilise un échec de connexion.
+/// Records a failed login.
 pub fn record_failure(ip: &str) {
     let mut failures = lock();
 
@@ -59,7 +58,7 @@ pub fn record_failure(ip: &str) {
     failures
         .entry(ip.to_owned())
         .and_modify(|attempts| {
-            // Une série d'échecs interrompue assez longtemps ne compte plus.
+            // A run of failures interrupted for long enough no longer counts.
             attempts.count = if attempts.last.elapsed() < LOCKOUT {
                 attempts.count.saturating_add(1)
             } else {
@@ -73,16 +72,18 @@ pub fn record_failure(ip: &str) {
         });
 }
 
-/// Efface le compteur après une connexion réussie.
+/// Clears the counter after a successful login.
 pub fn record_success(ip: &str) {
     lock().remove(ip);
 }
 
 fn lock() -> std::sync::MutexGuard<'static, HashMap<String, Attempts>> {
     let failures = FAILURES.get_or_init(|| Mutex::new(HashMap::new()));
-    // Un poison ne peut venir que d'une panique sous le verrou ; les compteurs
-    // restent exploitables et les perdre serait plus grave que de les reprendre.
-    failures.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    // Poisoning can only come from a panic while holding the lock; the counters
+    // are still usable, and losing them would be worse than picking them back up.
+    failures
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[cfg(test)]

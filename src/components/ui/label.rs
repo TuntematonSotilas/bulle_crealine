@@ -6,7 +6,7 @@ pub fn Label(
     // Styling
     #[prop(into, optional)] class: String,
 
-    /// Identifiant du champ décrit, rendu dans l'attribut `for`.
+    /// Id of the field being described, rendered into the `for` attribute.
     #[prop(into, optional)]
     r#for: Option<String>,
 

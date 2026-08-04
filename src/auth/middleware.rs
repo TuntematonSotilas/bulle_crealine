@@ -1,4 +1,4 @@
-//! Garde-fou Actix sur les pages d'administration.
+//! Actix guard over the admin pages.
 
 use actix_web::body::{EitherBody, MessageBody};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
@@ -8,13 +8,13 @@ use actix_web::{Error, HttpResponse};
 
 use crate::auth::{ADMIN_PATH, LOGIN_PATH, session};
 
-/// Renvoie les requêtes non authentifiées vers la page de connexion.
+/// Sends unauthenticated requests back to the login page.
 ///
-/// Intervient avant le rendu de Leptos, si bien qu'une page d'administration
-/// n'est jamais ni construite ni envoyée à un visiteur non authentifié.
+/// Runs before Leptos renders anything, so an admin page is never built nor sent
+/// to an unauthenticated visitor.
 ///
-/// Ne couvre en revanche pas les server functions, servies sous `/api` : à
-/// chacune d'elles d'appeler [`crate::auth::require_admin`].
+/// It does not cover server functions, served under `/api`: each of those has to
+/// call [`crate::auth::require_admin`] itself.
 pub async fn admin_guard<B>(
     request: ServiceRequest,
     next: Next<B>,
@@ -32,11 +32,11 @@ where
     Ok(next.call(request).await?.map_into_left_body())
 }
 
-/// Vrai pour les pages d'administration exigeant une authentification.
+/// True for the admin pages that require authentication.
 fn is_protected(path: &str) -> bool {
     let path = path.trim_end_matches('/');
-    // Comparer le préfixe complet, pour ne pas embarquer une éventuelle page
-    // publique dont le chemin commencerait par les mêmes lettres.
+    // Compare the whole prefix, so as not to catch a public page whose path
+    // happens to start with the same letters.
     let is_admin_page = path == ADMIN_PATH || path.starts_with(&format!("{ADMIN_PATH}/"));
 
     is_admin_page && path != LOGIN_PATH
