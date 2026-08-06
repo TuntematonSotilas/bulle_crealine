@@ -1,12 +1,10 @@
 use icons::MapPin;
+use leptos::either::EitherOf3;
 use leptos::prelude::*;
+use crate::api::sessions::upcoming_sessions;
+use crate::auth::user_message;
 use crate::components::ui::{button::Button, carousel::*};
-
-pub struct Session {
-    pub date: String,
-    pub theme: String,
-    pub price: String,
-}
+use crate::models::ServiceType;
 
 pub struct DetPerAge {
     pub prefix: String,
@@ -19,20 +17,26 @@ pub fn ServiceBlock(
     #[prop(into)] title: String,
     #[prop(into)] description: String,
     #[prop(optional, default = Vec::new())] details_per_age: Vec<DetPerAge>,
-    #[prop(into)] is_register: bool,
     #[prop(into)] schedule: String,
     #[prop(into)] place: String,
     #[prop(into)] age: String,
     #[prop(into)] place_link: String,
     #[prop(optional)] steps: Vec<String>,
-    #[prop(optional)] sessions: Vec<Session>,
     #[prop(into)] pictures: Vec<String>,
+    /// Which workshop this block describes. Without one there is neither a
+    /// booking page to point at nor sessions to list, so both are left out.
+    #[prop(optional)] service: Option<ServiceType>,
 ) -> impl IntoView {
 
-    let btn_txt = match is_register {
-        true => "S'inscrire",
-        false => "En savoir plus",
-    };
+    let sessions_section = service.map(|service| view! { <UpcomingSessions service=service/> });
+
+    let register_button = service.map(|service| view! {
+        <div class="mt-auto">
+            <Button class="w-full md:w-auto" href=format!("/booking/{}", service.slug())>
+                "S'inscrire"
+            </Button>
+        </div>
+    });
 
     let steps_view = steps
         .into_iter()
@@ -45,16 +49,6 @@ pub fn ServiceBlock(
                 <p class="text-sm text-[var(--gray-text)] pt-0.5">{step}</p>
             </div>
         }.into_any())
-        .collect::<Vec<_>>();
-
-    let sessions_view = sessions
-        .into_iter()
-        .map(|session| view! { 
-            <div class="p-4 border-l-4 border-primary bg-gradient-to-r from-primary/10 dark:from-primary/20 to-transparent rounded-r-lg hover:shadow-md dark:hover:shadow-primary/20 transition-shadow">
-                <div class="font-semibold text-[var(--gray-text)]">{session.date}</div>
-                <div class="text-sm text-[var(--gray-text)] mt-1">"Thème : "{session.theme}</div>
-                <div class="text-sm font-medium mt-2">"Prix : "{session.price}{"€"}</div>
-            </div> }.into_any())
         .collect::<Vec<_>>();
 
     let carousel_view = pictures
@@ -138,21 +132,96 @@ pub fn ServiceBlock(
                     </div>
             
                     /* Sessions */
-                    <div class="mb-6">
-                        <h4 class="text-lg font-bold mb-4">{"Prochaines séances"}</h4>
-                        <div class="space-y-3">
-                            {sessions_view}
-                        </div>
-                    </div>
-                        
+                    {sessions_section}
+
                     /* Register Button */
-                    <div class="mt-auto">
-                        <Button class="w-full md:w-auto">
-                            {btn_txt}
-                        </Button>
-                    </div>
+                    {register_button}
                 </div>
             </div>
         </article>
     }.into_any()
+}
+
+/// The dates open to booking for this workshop, read from the database.
+///
+/// Only the sessions still to come are listed, and each carries what is left of
+/// its capacity, so the block and the booking page never disagree.
+#[component]
+fn UpcomingSessions(service: ServiceType) -> impl IntoView {
+    let sessions = Resource::new(
+        move || service.slug().to_owned(),
+        |slug| async move { upcoming_sessions(slug).await },
+    );
+
+    view! {
+        <div class="mb-6">
+            <h4 class="text-lg font-bold mb-4">{"Prochaines séances"}</h4>
+
+            <Transition fallback=|| {
+                view! {
+                    <p class="text-sm text-[var(--gray-text)]">"Chargement des séances…"</p>
+                }
+            }>
+                {move || Suspend::new(async move {
+                    match sessions.await {
+                        // The dates are a nicety on a page that mostly presents the
+                        // workshop, so a storage failure says so and lets the rest be.
+                        Err(error) => {
+                            EitherOf3::A(
+                                view! {
+                                    <p class="text-sm text-[var(--gray-text)]">
+                                        {user_message(&error)}
+                                    </p>
+                                },
+                            )
+                        }
+                        Ok(available) if available.is_empty() => {
+                            EitherOf3::B(
+                                view! {
+                                    <p class="text-sm text-[var(--gray-text)]">
+                                        "Aucune date n'est programmée pour le moment."
+                                    </p>
+                                },
+                            )
+                        }
+                        Ok(available) => {
+                            EitherOf3::C(
+                                view! {
+                                    <div class="space-y-3">
+                                        {available
+                                            .into_iter()
+                                            .map(|session| {
+                                                let price = session.price_label();
+                                                let availability = session.availability_label();
+                                                let full = session.is_full();
+
+                                                view! {
+                                                    <div class="p-4 border-l-4 border-primary bg-gradient-to-r from-primary/10 dark:from-primary/20 to-transparent rounded-r-lg hover:shadow-md dark:hover:shadow-primary/20 transition-shadow">
+                                                        <div class="font-semibold text-[var(--gray-text)]">
+                                                            {session.date_label}
+                                                        </div>
+                                                        <div class="text-sm text-[var(--gray-text)] mt-1">
+                                                            "Thème : "{session.theme}
+                                                        </div>
+                                                        <div class="flex flex-wrap gap-x-3 items-baseline mt-2">
+                                                            <span class="text-sm font-medium">"Prix : "{price}</span>
+                                                            <span class=if full {
+                                                                "text-sm font-medium text-destructive"
+                                                            } else {
+                                                                "text-sm text-[var(--gray-text)]"
+                                                            }>{availability}</span>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            })
+                                            .collect::<Vec<_>>()}
+                                    </div>
+                                },
+                            )
+                        }
+                    }
+                })}
+            </Transition>
+        </div>
+    }
 }

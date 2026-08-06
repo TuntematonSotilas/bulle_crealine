@@ -1,8 +1,12 @@
 #![recursion_limit = "256"]
 
+pub mod api;
 pub mod app;
 pub mod auth;
 pub mod components;
+#[cfg(feature = "ssr")]
+pub mod db;
+pub mod models;
 pub mod pages;
 
 #[cfg(feature = "hydrate")]

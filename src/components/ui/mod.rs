@@ -1,7 +1,11 @@
+pub mod alert;
 pub mod button;
 pub mod card;
 pub mod label;
 pub mod navigation_menu;
+pub mod select;
+pub mod table;
+pub mod textarea;
 pub mod theme_toggle;
 pub mod footer;
 pub mod input;

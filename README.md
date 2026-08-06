@@ -21,6 +21,40 @@ Live here : https://bulle-crealine.onrender.com
 
     cargo leptos build --release
     
+## Réservations (MongoDB)
+
+Deux collections dans la base `bulle_crealine_db` :
+
+| Collection | Contenu |
+| --- | --- |
+| `sessions` | les séances proposées : type d'atelier, date, thème, prix, nombre de places |
+| `bookings` | les réservations : séance, nom, e-mail, téléphone, nb de personnes, commentaire du client, note interne de l'admin |
+
+Une seule variable est nécessaire :
+
+| Variable | Rôle |
+| --- | --- |
+| `MONGODB_URI` | chaîne de connexion du cluster |
+| `MONGODB_DATABASE` | facultatif, remplace `bulle_crealine_db` |
+
+Sans `MONGODB_URI`, le site public démarre normalement : seules les pages de
+réservation et d'administration signalent que les données sont inaccessibles.
+
+    $env:MONGODB_URI = "mongodb+srv://..."
+    cargo leptos watch
+
+### Pages
+
+| Page | Accès | Rôle |
+| --- | --- | --- |
+| `/booking/<type-atelier>` | public | séances à venir de ce type + formulaire de réservation |
+| `/admin/sessions` | admin | créer, modifier, supprimer les séances |
+| `/admin/bookings` | admin | toutes les réservations, avec une note interne éditable |
+
+Les `<type-atelier>` sont les mêmes slugs que les pages services :
+`creatifs-pour-tous`, `parents-enfants`, `aperos-creatifs`, `hors-les-murs`,
+`en-institution`, `individuels`.
+
 ## Administration
 
 L'espace d'administration est sur `/admin`, la connexion sur `/admin/login`.
@@ -42,8 +76,8 @@ Les deux dernières se génèrent d'un coup :
 En local (.bashrc) :
 
     export ADMIN_EMAIL="vous@exemple.fr"
-    export ADMIN_PASSWORD_HASH="<hash>"
     export ADMIN_SESSION_SECRET="<secret>"
+    export ADMIN_PASSWORD_HASH="<hash>"
 
 ### Fonctionnement
 

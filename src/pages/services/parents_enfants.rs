@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 
-use crate::components::blocks::service_block::{DetPerAge, ServiceBlock, Session};
+use crate::components::blocks::service_block::{DetPerAge, ServiceBlock};
+use crate::models::ServiceType;
 
 /// Renders the "Ateliers parents-enfants" page.
 #[component]
@@ -39,18 +40,6 @@ pub fn AteliersParentsEnfants() -> impl IntoView {
         "Temps de partage et d'échange autour des créations",
         "Clôture de la séance et prise de retours"
     ].into_iter().map(String::from).collect::<Vec<String>>();
-    let sessions = vec![
-        Session {
-            date: "Mercredi 3 juillet 2026".to_string(),
-            theme: "Animaux / Scuplture".to_string(),
-            price: "65".to_string(),
-        },
-        Session {
-            date: "Mercredi 7 août 2026".to_string(),
-            theme: "Nature / Peinture".to_string(),
-            price: "65".to_string(),
-        },
-    ];
     let pics = vec![
         "/assets/fake1.png".to_string(),
         "/assets/fake2.png".to_string(),
@@ -60,12 +49,11 @@ pub fn AteliersParentsEnfants() -> impl IntoView {
             description=desc
             details_per_age=dets_per_age
             pictures=pics
-            is_register=true
             schedule=schedule
             place=place
             age=age
             place_link=place_link
             steps=steps
-            sessions=sessions/>
+            service=ServiceType::ParentsEnfants/>
     }
 }

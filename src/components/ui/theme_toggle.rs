@@ -12,7 +12,6 @@ pub fn ThemeToggle() -> impl IntoView {
             {"
             .theme__toggle_transition {
             -webkit-tap-highlight-color: transparent;
-            margin-top: 8px;
 
             svg path {
             transform-origin: center;
@@ -51,7 +50,9 @@ pub fn ThemeToggle() -> impl IntoView {
             type="button"
             aria-label="Toggle theme"
             class=move || {
-                let base_class = "theme__toggle_transition";
+                // Sized and centred like the buttons it sits next to, so the icon
+                // lands on the same baseline in the desktop bar and the mobile one.
+                let base_class = "theme__toggle_transition inline-flex justify-center items-center w-9 h-9 rounded-md transition-colors hover:bg-accent";
                 if theme_mode.get() { format!("{base_class} switch") } else { base_class.to_string() }
             }
             on:click=move |_| theme_mode.toggle()

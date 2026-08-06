@@ -1,5 +1,6 @@
 use leptos::prelude::*;
-use crate::components::blocks::service_block::{ServiceBlock, Session};
+use crate::components::blocks::service_block::ServiceBlock;
+use crate::models::ServiceType;
 
 /// Renders the "Ateliers créatifs pour tous" page.
 #[component]
@@ -21,18 +22,6 @@ pub fn AteliersCreatifsPourTous() -> impl IntoView {
         "Temps de partage et d'échange autour des créations",
         "Clôture de la séance et prise de retours"
     ].into_iter().map(String::from).collect::<Vec<String>>();
-    let sessions = vec![
-        Session {
-            date: "Dimanche 5 juillet 2026".to_string(),
-            theme: "Animaux / Scuplture".to_string(),
-            price: "65".to_string(),
-        },
-        Session {
-            date: "Dimanche 12 juillet 2026".to_string(),
-            theme: "Nature / Peinture".to_string(),
-            price: "65".to_string(),
-        },
-    ];
     let pics = vec![
         "/assets/fake1.png".to_string(),
         "/assets/fake2.png".to_string(),
@@ -41,12 +30,11 @@ pub fn AteliersCreatifsPourTous() -> impl IntoView {
         <ServiceBlock title=title 
             description=desc
             pictures=pics
-            is_register=true
             schedule=schedule
             place=place
             age=age
             place_link=place_link
             steps=steps
-            sessions=sessions/>
+            service=ServiceType::CreatifsPourTous/>
     }
 }

@@ -16,10 +16,21 @@ async fn main() -> std::io::Result<()> {
     // The admin area is optional: without a usable configuration, the public site
     // starts as usual and `/admin` simply stays out of reach.
     match AdminConfig::init() {
-        Ok(config) => println!("administration activée pour {}", config.email),
+        Ok(config) => println!("admin area enabled for {}", config.email),
         Err(error) => eprintln!(
-            "administration désactivée : {error}\n  \
-             renseignez ADMIN_EMAIL, ADMIN_PASSWORD_HASH et ADMIN_SESSION_SECRET pour l'activer"
+            "admin area disabled: {error}\n  \
+             set ADMIN_EMAIL, ADMIN_PASSWORD_HASH and ADMIN_SESSION_SECRET to enable it"
+        ),
+    }
+
+    // Storage is optional too: the pages that need it report as much rather than
+    // keeping the whole site from booting. Connecting here surfaces a bad URI at
+    // startup instead of on a visitor's first booking, and creates the indexes.
+    match bulle_crealine::db::init().await {
+        Ok(_) => println!("connected to mongodb"),
+        Err(error) => eprintln!(
+            "bookings disabled: {error}\n  \
+             set MONGODB_URI to enable them"
         ),
     }
 

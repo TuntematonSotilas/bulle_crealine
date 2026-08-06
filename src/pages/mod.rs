@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod booking;
 pub mod home;
 pub mod not_found;
 pub mod qui_suis_je;
@@ -6,7 +7,8 @@ pub mod newsletter;
 pub mod services;
 pub mod mentions_legales;
 
-pub use admin::{AdminLoginPage, AdminPage};
+pub use admin::{AdminBookingsPage, AdminLoginPage, AdminPage, AdminSessionsPage};
+pub use booking::BookingPage;
 pub use home::HomePage;
 pub use not_found::NotFound;
 pub use qui_suis_je::QuiSuisJePage;
