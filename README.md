@@ -43,23 +43,9 @@ réservation et d'administration signalent que les données sont inaccessibles.
     $env:MONGODB_URI = "mongodb+srv://..."
     cargo leptos watch
 
-### Pages
-
-| Page | Accès | Rôle |
-| --- | --- | --- |
-| `/booking/<type-atelier>` | public | séances à venir de ce type + formulaire de réservation |
-| `/admin/sessions` | admin | créer, modifier, supprimer les séances |
-| `/admin/bookings` | admin | toutes les réservations, avec une note interne éditable |
-
-Les `<type-atelier>` sont les mêmes slugs que les pages services :
-`creatifs-pour-tous`, `parents-enfants`, `aperos-creatifs`, `hors-les-murs`,
-`en-institution`, `individuels`.
-
 ## Administration
 
-L'espace d'administration est sur `/admin`, la connexion sur `/admin/login`.
-
-Il n'y a qu'un seul compte, défini par trois variables d'environnement — pas de
+Il n'y a qu'un seul compte admin, défini par trois variables d'environnement — pas de
 base d'utilisateurs, pas d'inscription. Sans ces variables, le site public
 démarre normalement et `/admin` reste inaccessible.
 

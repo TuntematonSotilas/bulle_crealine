@@ -1,3 +1,5 @@
+use icons::{Eye, EyeOff};
+use leptos::html;
 use leptos::prelude::*;
 use leptos_meta::Title;
 
@@ -21,6 +23,22 @@ pub fn AdminLoginPage() -> impl IntoView {
             .get()
             .and_then(|result| result.err())
             .map(|error| user_message(&error))
+    };
+
+    let password = NodeRef::<html::Input>::new();
+    let revealed = RwSignal::new(false);
+
+    // The type is flipped on the element itself rather than through a prop:
+    // `Input` takes its type as a plain value, so there is nothing reactive to
+    // drive. Without the WASM bundle the button does nothing and the field simply
+    // stays masked.
+    let toggle_password = move |_| {
+        let next = !revealed.get_untracked();
+        revealed.set(next);
+
+        if let Some(field) = password.get_untracked() {
+            field.set_type(if next { "text" } else { "password" });
+        }
     };
 
     view! {
@@ -55,13 +73,40 @@ pub fn AdminLoginPage() -> impl IntoView {
 
                                 <div class="grid gap-3">
                                     <Label r#for="password">"Mot de passe"</Label>
-                                    <Input
-                                        r#type=InputType::Password
-                                        id="password"
-                                        name="password"
-                                        autocomplete="current-password"
-                                        required=true
-                                    />
+                                    <div class="relative">
+                                        <Input
+                                            r#type=InputType::Password
+                                            id="password"
+                                            name="password"
+                                            autocomplete="current-password"
+                                            required=true
+                                            node_ref=password
+                                            class="pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            on:click=toggle_password
+                                            aria-controls="password"
+                                            aria-pressed=move || {
+                                                if revealed.get() { "true" } else { "false" }
+                                            }
+                                            aria-label=move || {
+                                                if revealed.get() {
+                                                    "Masquer le mot de passe"
+                                                } else {
+                                                    "Afficher le mot de passe"
+                                                }
+                                            }
+                                            class="flex absolute inset-y-0 right-0 items-center px-3 rounded-r-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                                        >
+                                            <Show
+                                                when=move || revealed.get()
+                                                fallback=|| view! { <Eye class="size-4"/> }
+                                            >
+                                                <EyeOff class="size-4"/>
+                                            </Show>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {move || {

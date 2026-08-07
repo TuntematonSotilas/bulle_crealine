@@ -3,6 +3,7 @@ pub mod button;
 pub mod card;
 pub mod label;
 pub mod navigation_menu;
+pub mod number_field;
 pub mod select;
 pub mod table;
 pub mod textarea;

@@ -12,6 +12,7 @@ use crate::components::ui::button::Button;
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 use crate::components::ui::input::{Input, InputType};
 use crate::components::ui::label::Label;
+use crate::components::ui::number_field::NumberField;
 use crate::components::ui::textarea::Textarea;
 use crate::models::{MAX_PERSONS_PER_BOOKING, ServiceType, SessionView};
 
@@ -224,15 +225,13 @@ fn BookingForm(service: ServiceType, sessions: Vec<SessionView>) -> impl IntoVie
 
                                 <div class="grid gap-3">
                                     <Label r#for="persons">"Nombre de personnes"</Label>
-                                    <Input
-                                        r#type=InputType::Number
+                                    <NumberField
                                         id="persons"
                                         name="persons"
-                                        min="1"
-                                        max=MAX_PERSONS_PER_BOOKING.to_string()
-                                        step="1"
+                                        min=1.0
+                                        max=f64::from(MAX_PERSONS_PER_BOOKING)
+                                        value=1.0
                                         required=true
-                                        attr:value="1"
                                     />
                                 </div>
                             </div>

@@ -11,6 +11,7 @@ use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 use crate::components::ui::input::{Input, InputType};
 use crate::components::ui::label::Label;
+use crate::components::ui::number_field::NumberField;
 use crate::components::ui::select::Select;
 use crate::components::ui::table::*;
 use crate::models::{ServiceType, SessionView};
@@ -312,33 +313,27 @@ fn SessionForm(
 
                             <div class="grid gap-3">
                                 <Label r#for="price">"Prix (€)"</Label>
-                                <Input
-                                    r#type=InputType::Number
+                                <NumberField
                                     id="price"
                                     name="price"
-                                    min="0"
-                                    step="0.5"
+                                    min=0.0
+                                    step=0.5
                                     required=true
-                                    attr:value=session
-                                        .as_ref()
-                                        .map(|s| s.price.to_string())
-                                        .unwrap_or_else(|| "0".to_owned())
+                                    value=session.as_ref().map(|s| s.price).unwrap_or(0.0)
                                 />
                             </div>
 
                             <div class="grid gap-3">
                                 <Label r#for="max_persons">"Nombre de places (personnes)"</Label>
-                                <Input
-                                    r#type=InputType::Number
+                                <NumberField
                                     id="max_persons"
                                     name="max_persons"
-                                    min="1"
-                                    step="1"
+                                    min=1.0
                                     required=true
-                                    attr:value=session
+                                    value=session
                                         .as_ref()
-                                        .map(|s| s.max_persons.to_string())
-                                        .unwrap_or_else(|| "8".to_owned())
+                                        .map(|s| f64::from(s.max_persons))
+                                        .unwrap_or(8.0)
                                 />
                             </div>
 
