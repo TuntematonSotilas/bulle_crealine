@@ -51,15 +51,9 @@ pub fn HomePage() -> impl IntoView {
 
     view! {
         <div class="home-hero border border-(--border) rounded-[2rem] shadow-(--shadow) max-w-4xl mx-auto">
-            <h3 class="home-hero-title">"Bulle Créaline"</h3>
-            <h1 class="home-hero-subtitle">"Médiation artistique en relation d'aide."</h1>
-            <h2 class="home-hero-words">
-                <span class="home-hero-word">"Créer"</span>
-                <span class="home-hero-word">" 🎨 "</span>
-                <span class="home-hero-word">"Se ressourcer"</span>
-                <span class="home-hero-word">" 💡 "</span>
-                <span class="home-hero-word">"Partager"</span>
-            </h2>
+            <h2 class="home-hero-title">"Bulle Créaline"</h2>
+            <h3>"Ma source de créativité"</h3>
+            <h3>"Ateliers créatifs bien-être"</h3>
         </div>
 
         <MarqueeWrapper class="p-1 h-32 mt-8">

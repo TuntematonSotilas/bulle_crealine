@@ -10,20 +10,19 @@ pub fn QuiSuisJePage() -> impl IntoView {
                     <div class="space-y-4">
                         <h1 class="text-4xl font-semibold tracking-tight">"Qui suis-je ?"</h1>
                         <p class="text-lg leading-8 text-muted-foreground">
-                            "Née en 1992, j’ai longtemps cherché ma place. Créative depuis toujours, j’ai appris au fil du temps à transformer mes différences en force et à avancer à mon rythme."
+                            "Créative depuis toujours, j’ai appris au fil du temps à transformer mes différences en force et à avancer à mon rythme."
                         </p>
                     </div>
 
-                    <div class="space-y-4 text-base leading-8 text-foreground">
+                    <div class="space-y-4 text-base leading-8 text-foreground p-6 rounded-[2rem] border border-border bg-background shadow-lg">
+                        <h2 class="text-2xl font-semibold tracking-tight">"Mon parcours"</h2>
                         <p>
-                            "Mes expériences de vie, mes formations et mes déclics personnels m’ont peu à peu menée vers ce qui me ressemble profondément : créer, transmettre et accompagner."
+                            "Née en 1992, j’ai longtemps cherché ma place. Mes expériences de vie, mes formations et mes déclics personnels m’ont peu à peu menée vers ce qui me ressemble profondément : créer, transmettre et accompagner."
                         </p>
                         <p>
                             "Aujourd’hui, j’ai à cœur de proposer des ateliers créatifs, doux et bienveillants, où chacun peut explorer, essayer et s’exprimer sans pression. Je crois beaucoup à la pair-aidance, au partage, et à la créativité comme outil de reconnexion à soi."
                         </p>
-                        <p>
-                            "Avec La Bulle Créaline, je souhaite offrir un lieu chaleureux, vivant et rassurant, où l’on vient créer, souffler et repartir avec un peu plus de fierté et de joie."
-                        </p>
+                        
                     </div>
                 </div>
 
@@ -52,7 +51,9 @@ pub fn QuiSuisJePage() -> impl IntoView {
                 </div>
 
                 <div class="rounded-[2rem] border border-border bg-surface p-6 shadow-sm">
-                    <p class="text-base leading-8 text-foreground">"Créative depuis l’enfance, j’ai longtemps cherché ma place avant de comprendre que mes différences faisaient aussi ma force. Aujourd’hui, j’ai choisi de les mettre au service d’un projet qui me ressemble : proposer des ateliers créatifs, doux et accessibles, dans un esprit de partage, de bienveillance et de reconnexion à soi."</p>
+                    <p class="text-base leading-8 text-foreground">
+                        "Avec La Bulle Créaline, je souhaite offrir un lieu chaleureux, vivant et rassurant, où l’on vient créer, souffler et repartir avec un peu plus de fierté et de joie."
+                    </p>
                 </div>
             </div>
         </div>
