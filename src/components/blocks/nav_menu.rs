@@ -72,7 +72,7 @@ fn DesktopNav() -> impl IntoView {
                     <NavigationMenuItem>
                          <NavigationMenuTrigger>"Autres Ateliers"</NavigationMenuTrigger>
                         <NavigationMenuContent>
-                            <div class="w-[320px] p-3">
+                            <div class="w-[320px] p-0">
                                 <ul class="space-y-2">
                                     <li class="p-1">
                                         <a href="/services/en-institution" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
@@ -97,7 +97,7 @@ fn DesktopNav() -> impl IntoView {
                     <NavigationMenuItem>
                          <NavigationMenuTrigger>"Moi et mon atelier"</NavigationMenuTrigger>
                         <NavigationMenuContent>
-                            <div class="w-[320px] p-3">
+                            <div class="w-[320px] p-0">
                                 <ul class="space-y-2">
                                     <li class="p-1">
                                         <a href="/moi-et-mon-atelier/qui-suis-je" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
@@ -124,7 +124,11 @@ fn DesktopNav() -> impl IntoView {
                         </NavigationMenuContent>
                     </NavigationMenuItem>
                     
-                    
+                     <NavigationMenuItem>
+                        <NavigationMenuLink href="/newsletter" class=navigation_menu_trigger_style()>
+                            "Newsletter"
+                        </NavigationMenuLink>
+                    </NavigationMenuItem>
 
                     <NavigationMenuItem>
                         <ThemeToggle/>

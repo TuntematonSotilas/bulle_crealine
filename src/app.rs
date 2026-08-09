@@ -43,9 +43,12 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/services/parents-enfants-6-12-ans") view=AteliersParentsEnfants6A12Ans/>
                     <Route path=path!("/services/apres-midis-creatifs") view=ApresMidisCreatifs/>
                     <Route path=path!("/services/aperos-creatifs") view=AperosCreatifs/>
-                    <Route path=path!("/qui-suis-je") view=QuiSuisJePage/>
-                    <Route path=path!("/mentions-legales") view=MentionsLegales/>
+                    
+                    <Route path=path!("/moi-et-mon-atelier/qui-suis-je") view=QuiSuisJePage/>
+                    
                     <Route path=path!("/newsletter") view=NewsletterPage/>
+                    <Route path=path!("/mentions-legales") view=MentionsLegales/>
+                    
                     <Route path=path!("/booking/:service") view=BookingPage/>
                     <Route path=path!("/admin") view=AdminPage/>
                     <Route path=path!("/admin/login") view=AdminLoginPage/>
