@@ -2,13 +2,7 @@ use icons::{Menu, X};
 use leptos::prelude::*;
 
 use crate::components::ui::{navigation_menu::*, theme_toggle::ThemeToggle};
-use crate::models::ServiceType;
 
-/// The pages that are not one of the workshops.
-const PAGES: [(&str, &str); 2] = [
-    ("/qui-suis-je", "Qui suis-je"),
-    ("/newsletter", "Newsletter"),
-];
 
 #[component]
 pub fn NavMenu() -> impl IntoView {
@@ -25,7 +19,6 @@ fn DesktopNav() -> impl IntoView {
         <div class="hidden justify-center items-start py-8 md:flex">
             <NavigationMenu>
                 <NavigationMenuList>
-
                     <NavigationMenuItem>
                         <NavigationMenuLink href="/" class=navigation_menu_trigger_style()>
                             <img src="/assets/icon.svg" alt="Logo" class="w-8 h-8"/>
@@ -33,50 +26,109 @@ fn DesktopNav() -> impl IntoView {
                     </NavigationMenuItem>
 
                     <NavigationMenuItem>
-                        <NavigationMenuTrigger>"Services"</NavigationMenuTrigger>
+                        <NavigationMenuTrigger>"Ateliers à domicile"</NavigationMenuTrigger>
                         <NavigationMenuContent>
-                            <ul class="grid gap-3 p-0 md:grid-cols-2 md:w-[500px] lg:w-[600px]">
-                                {ServiceType::ALL
-                                    .into_iter()
-                                    .map(|service| {
-                                        view! {
+                            <div class="w-[320px] p-3">
+                                <ul class="space-y-2">
+                                    <li class="p-1">
+                                        <div class="block text-sm font-medium leading-none text-foreground">
+                                            "Ateliers parents-enfants"
+                                        </div>
+                                        <ul class="mt-2 ml-4 space-y-1 text-sm text-muted-foreground">
                                             <li>
-                                                <a
-                                                    href=service.page_path()
-                                                    class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
-                                                >
-                                                    <div class="text-sm font-medium leading-none">
-                                                        {service.label()}
-                                                    </div>
+                                                <a href="/services/parents-enfants-moins-6-ans" class="block py-1 transition-colors hover:text-primary">
+                                                    "Moins de 6 ans"
                                                 </a>
                                             </li>
-                                        }
-                                    })
-                                    .collect::<Vec<_>>()}
-                            </ul>
+                                            <li>
+                                                <a href="/services/parents-enfants-6-12-ans" class="block py-1 transition-colors hover:text-primary">
+                                                    "6 à 12 ans"
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </li>
+                                    <li class="p-1">
+                                        <div class="block text-sm font-medium leading-none text-foreground">
+                                            "Ateliers adultes"
+                                        </div>
+                                        <ul class="mt-2 ml-4 space-y-1 text-sm text-muted-foreground">
+                                            <li class="p-1">
+                                                <a href="/services/aperos-creatifs" class="block text-sm font-medium leading-none transition-colors hover:text-primary">
+                                                    "Apéros créatifs"
+                                                </a>
+                                            </li>
+                                            <li class="p-1">
+                                                <a href="/services/apres-midis-creatifs" class="block text-sm font-medium leading-none transition-colors hover:text-primary">
+                                                    "Après-midis créatifs"
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </li>
+                                </ul>
+                            </div>
                         </NavigationMenuContent>
                     </NavigationMenuItem>
 
-                    {PAGES
-                        .into_iter()
-                        .map(|(href, title)| {
-                            view! {
-                                <NavigationMenuItem>
-                                    <NavigationMenuLink
-                                        class=navigation_menu_trigger_style()
-                                        href=href
-                                    >
-                                        {title}
-                                    </NavigationMenuLink>
-                                </NavigationMenuItem>
-                            }
-                        })
-                        .collect::<Vec<_>>()}
+                    <NavigationMenuItem>
+                         <NavigationMenuTrigger>"Autres Ateliers"</NavigationMenuTrigger>
+                        <NavigationMenuContent>
+                            <div class="w-[320px] p-3">
+                                <ul class="space-y-2">
+                                    <li class="p-1">
+                                        <a href="/services/en-institution" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                            <div class="text-sm font-medium leading-none">"Ateliers en institution"</div>
+                                        </a>
+                                    </li>
+                                    <li class="p-1">
+                                        <a href="/services/hors-les-murs" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                            <div class="text-sm font-medium leading-none">"Ateliers hors les murs"</div>
+                                        </a>
+                                    </li>
+                                    <li class="p-1">
+                                        <a href="/services/individuels" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                            <div class="text-sm font-medium leading-none">"Ateliers individuels"</div>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </NavigationMenuContent>
+                    </NavigationMenuItem>
+
+                    <NavigationMenuItem>
+                         <NavigationMenuTrigger>"Moi et mon atelier"</NavigationMenuTrigger>
+                        <NavigationMenuContent>
+                            <div class="w-[320px] p-3">
+                                <ul class="space-y-2">
+                                    <li class="p-1">
+                                        <a href="/moi-et-mon-atelier/qui-suis-je" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                            <div class="text-sm font-medium leading-none">"Qui-suis-je?"</div>
+                                        </a>
+                                    </li>
+                                    <li class="p-1">
+                                        <a href="/moi-et-mon-atelier/mon-atelier" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                            <div class="text-sm font-medium leading-none">"Mon atelier"</div>
+                                        </a>
+                                    </li>
+                                    <li class="p-1">
+                                        <a href="/moi-et-mon-atelier/photos" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                            <div class="text-sm font-medium leading-none">"Photos des ateliers"</div>
+                                        </a>
+                                    </li>
+                                    <li class="p-1">
+                                        <a href="/moi-et-mon-atelier/formations" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                            <div class="text-sm font-medium leading-none">"Formations"</div>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </NavigationMenuContent>
+                    </NavigationMenuItem>
+                    
+                    
 
                     <NavigationMenuItem>
                         <ThemeToggle/>
                     </NavigationMenuItem>
-
                 </NavigationMenuList>
             </NavigationMenu>
         </div>
@@ -142,45 +194,86 @@ fn MobileNav() -> impl IntoView {
             </div>
 
             <nav class="overflow-y-auto flex-1 px-4 py-6">
-                <p class="px-3 mb-2 text-xs font-semibold tracking-wide uppercase text-muted-foreground">
-                    "Services"
-                </p>
-                <ul class="mb-8">
-                    {ServiceType::ALL
-                        .into_iter()
-                        .map(|service| {
-                            view! {
-                                <li>
-                                    <a
-                                        href=service.page_path()
-                                        class="block px-3 py-3 text-lg rounded-md transition-colors hover:bg-accent"
-                                        on:click=close
-                                    >
-                                        {service.label()}
-                                    </a>
-                                </li>
-                            }
-                        })
-                        .collect::<Vec<_>>()}
-                </ul>
+                <ul class="space-y-2">
+                    <li>
+                        <div class="px-3 py-2 text-lg font-semibold">"Ateliers à domicile"</div>
+                        <ul class="ml-4 mt-2 space-y-1">
+                            <li>
+                                <div class="block px-3 py-2 rounded-md transition-colors hover:bg-accent">
+                                    "Ateliers parents-enfants"
+                                </div>
+                                <ul class="ml-4 mt-1 space-y-1 text-sm text-muted-foreground">
+                                    <li>
+                                        <a href="/services/parents-enfants-moins-6-ans" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                            "Moins de 6 ans"
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="/services/parents-enfants-6-12-ans" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                            "6 à 12 ans"
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li>
+                                <a href="/services/aperos-creatifs" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                    "Apéros créatifs"
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/services/apres-midis-creatifs" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                    "Après-midis créatifs"
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
 
-                <ul class="pt-6 border-t">
-                    {PAGES
-                        .into_iter()
-                        .map(|(href, title)| {
-                            view! {
-                                <li>
-                                    <a
-                                        href=href
-                                        class="block px-3 py-3 text-lg rounded-md transition-colors hover:bg-accent"
-                                        on:click=close
-                                    >
-                                        {title}
-                                    </a>
-                                </li>
-                            }
-                        })
-                        .collect::<Vec<_>>()}
+                    <li>
+                        <div class="px-3 py-2 text-lg font-semibold">"Autres Ateliers"</div>
+                        <ul class="ml-4 mt-2 space-y-1">
+                            <li>
+                                <a href="/pro/en-institution" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                    "Ateliers en institution"
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/pro/hors-les-murs" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                    "Ateliers hors les murs"
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/pro/individuels" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                    "Ateliers individuels"
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li>
+                        <div class="px-3 py-2 text-lg font-semibold">"Moi et mon atelier"</div>
+                        <ul class="ml-4 mt-2 space-y-1">
+                            <li>
+                                <a href="/moi-et-mon-atelier/qui-suis-je" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                    "Qui-suis-je?"
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/moi-et-mon-atelier/mon-atelier" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                    "Mon atelier"
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/moi-et-mon-atelier/photos" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                    "Photos des ateliers"
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/moi-et-mon-atelier/formations" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                    "Formations"
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
                 </ul>
             </nav>
         </div>

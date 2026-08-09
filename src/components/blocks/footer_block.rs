@@ -18,7 +18,7 @@ pub fn FooterBlock() -> impl IntoView {
                     <FooterLink attr:href="/mentions-legales">Mentions légales</FooterLink>
                 </FooterNavContainer>
                 <FooterNavContainer>
-                    <FooterExternalLink href="https://www.facebook.com/coraline.colibri" attr:aria-label="Facebook">
+                    <FooterExternalLink href="https://www.facebook.com/BulleCrealine" attr:aria-label="Facebook">
                         <Facebook />
                     </FooterExternalLink>
                     <FooterExternalLink href="https://www.instagram.com/bullecrealine" attr:aria-label="Instagram">

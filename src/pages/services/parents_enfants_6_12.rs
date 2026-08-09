@@ -1,31 +1,15 @@
 use leptos::prelude::*;
 
-use crate::components::blocks::service_block::{DetPerAge, ServiceBlock};
+use crate::components::blocks::service_block::ServiceBlock;
 use crate::models::ServiceType;
 
 /// Renders the "Ateliers parents-enfants" page.
 #[component]
-pub fn AteliersParentsEnfants() -> impl IntoView {
+pub fn AteliersParentsEnfants6A12Ans() -> impl IntoView {
 
-    let title = "Ateliers parents-enfants";
+    let title = "Ateliers parents-enfants (6 à 12 ans)";
     let desc = "Nos ateliers parents-enfants offrent un espace de création commune, favorisant un temps de partage loin des impératifs quotidiens.";
-    let dets_per_age = vec![
-        DetPerAge {
-            prefix: "Pour les enfants de ".to_string(),
-            age: "moins de 3 ans".to_string(),
-            description: ", pour un moment de decouverte de la créativité adapté et sans salir toute la maison.".to_string(),
-        },
-        DetPerAge {
-            prefix: "Pour les enfants de ".to_string(),
-            age: "3 à 10 ans".to_string(),
-            description: ", pour découvrir le plaisir de créer et la magie de créer pour soi ou pour les autres.".to_string(),
-        },
-        DetPerAge {
-            prefix: "Pour les enfants de ".to_string(),
-            age: "10 à 13 ans".to_string(),
-            description: ", pour découvrir l'autonomie et apprendre à innover.".to_string(),
-        },
-    ];
+    
     let schedule = "Chaque premier mercredi du mois, de 10h à 12h";
     let place = "Bulle Créaline, 5 Rue Marc Seguin, 42110 Feurs";
     let age = "De 0 à 13 ans";
@@ -47,13 +31,12 @@ pub fn AteliersParentsEnfants() -> impl IntoView {
     view! {
         <ServiceBlock title=title 
             description=desc
-            details_per_age=dets_per_age
             pictures=pics
             schedule=schedule
             place=place
             age=age
             place_link=place_link
             steps=steps
-            service=ServiceType::ParentsEnfants/>
+            service=ServiceType::ParentsEnfants6A12Ans/>
     }
 }

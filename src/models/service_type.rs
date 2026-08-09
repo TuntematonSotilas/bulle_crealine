@@ -8,23 +8,19 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ServiceType {
-    CreatifsPourTous,
-    ParentsEnfants,
+    ParentsEnfantsMoinsDe6Ans,
+    ParentsEnfants6A12Ans,
     AperosCreatifs,
-    HorsLesMurs,
-    EnInstitution,
-    Individuels,
+    ApresMidisCreatifs,
 }
 
 impl ServiceType {
     /// Every variant, in the order the admin form lists them.
-    pub const ALL: [Self; 6] = [
-        Self::CreatifsPourTous,
-        Self::ParentsEnfants,
+    pub const ALL: [Self; 4] = [
+        Self::ParentsEnfantsMoinsDe6Ans,
+        Self::ParentsEnfants6A12Ans,
         Self::AperosCreatifs,
-        Self::HorsLesMurs,
-        Self::EnInstitution,
-        Self::Individuels,
+        Self::ApresMidisCreatifs,
     ];
 
     /// URL slug, and the value stored in Mongo.
@@ -32,36 +28,30 @@ impl ServiceType {
     /// Must stay in step with the `serde` renaming above; a test guards that.
     pub const fn slug(self) -> &'static str {
         match self {
-            Self::CreatifsPourTous => "creatifs-pour-tous",
-            Self::ParentsEnfants => "parents-enfants",
+            Self::ParentsEnfantsMoinsDe6Ans => "parents-enfants-moins-6-ans",
+            Self::ParentsEnfants6A12Ans => "parents-enfants-6-12-ans",
             Self::AperosCreatifs => "aperos-creatifs",
-            Self::HorsLesMurs => "hors-les-murs",
-            Self::EnInstitution => "en-institution",
-            Self::Individuels => "individuels",
+            Self::ApresMidisCreatifs => "apres-midis-creatifs"
         }
     }
 
     /// Name shown to visitors.
     pub const fn label(self) -> &'static str {
         match self {
-            Self::CreatifsPourTous => "Ateliers créatifs pour tous",
-            Self::ParentsEnfants => "Ateliers parents-enfants",
+            Self::ParentsEnfantsMoinsDe6Ans => "Ateliers parents-enfants (moins de 6 ans)",
+            Self::ParentsEnfants6A12Ans => "Ateliers parents-enfants (6 à 12 ans)",
             Self::AperosCreatifs => "Apéros créatifs (adultes)",
-            Self::HorsLesMurs => "Ateliers hors les murs",
-            Self::EnInstitution => "Ateliers en institution",
-            Self::Individuels => "Ateliers individuels",
+            Self::ApresMidisCreatifs => "Ateliers après-midi créatifs (adultes)",
         }
     }
 
     /// Path of the public page describing this kind of workshop.
     pub const fn page_path(self) -> &'static str {
         match self {
-            Self::CreatifsPourTous => "/services/creatifs-pour-tous",
-            Self::ParentsEnfants => "/services/parents-enfants",
-            Self::AperosCreatifs => "/services/aperos-creatifs",
-            Self::HorsLesMurs => "/services/hors-les-murs",
-            Self::EnInstitution => "/services/en-institution",
-            Self::Individuels => "/services/individuels",
+            Self::ParentsEnfantsMoinsDe6Ans => "/services/parents_enfants_moins_6",
+            Self::ParentsEnfants6A12Ans => "/services/parents_enfants_6_12",
+            Self::AperosCreatifs => "/services/aperos_creatifs",
+            Self::ApresMidisCreatifs => "/services/apres_midis_creatifs",
         }
     }
 

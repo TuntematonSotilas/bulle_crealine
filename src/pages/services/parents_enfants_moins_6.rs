@@ -1,16 +1,18 @@
 use leptos::prelude::*;
+
 use crate::components::blocks::service_block::ServiceBlock;
 use crate::models::ServiceType;
 
-/// Renders the "Ateliers créatifs pour tous" page.
+/// Renders the "Ateliers parents-enfants" page.
 #[component]
-pub fn AteliersCreatifsPourTous() -> impl IntoView {
+pub fn AteliersParentsEnfantsMoinsDe6Ans() -> impl IntoView {
 
-    let title = "Ateliers créatifs pour tous";
-    let desc = "Découvrez nos ateliers créatifs conçus pour tous les âges et tous les niveaux.";
-    let schedule = "Tous les dimanches, de 14h à 17h";
+    let title = "Ateliers parents-enfants";
+    let desc = "Nos ateliers parents-enfants offrent un espace de création commune, favorisant un temps de partage loin des impératifs quotidiens.";
+
+    let schedule = "Chaque premier mercredi du mois, de 10h à 12h";
     let place = "Bulle Créaline, 5 Rue Marc Seguin, 42110 Feurs";
-    let age = "À partir de 13 ans";
+    let age = "De 0 à 13 ans";
     let place_link = "https://maps.app.goo.gl/Fgmpg9RF8HiPGrkf7";
     let steps = vec![
         "Accueil et présentation de l'atelier",
@@ -35,6 +37,6 @@ pub fn AteliersCreatifsPourTous() -> impl IntoView {
             age=age
             place_link=place_link
             steps=steps
-            service=ServiceType::CreatifsPourTous/>
+            service=ServiceType::ParentsEnfantsMoinsDe6Ans/>
     }
 }

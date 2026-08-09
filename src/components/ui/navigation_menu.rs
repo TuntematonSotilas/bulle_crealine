@@ -198,13 +198,13 @@ pub fn NavigationMenuList(children: Children, #[prop(optional, into)] class: Str
 /*                    NAVIGATION MENU ITEM                     */
 /* ========================================================== */
 
-/// NOTE: intentionally has NO `position: relative` so that NavigationMenuContent
-/// (with `position: absolute`) escapes to the <nav> root, making all panels
-/// appear at the same position → shared viewport effect.
+/// Each content panel is positioned relative to its own item so dropdowns
+/// align directly under their trigger buttons on desktop.
 #[component]
 pub fn NavigationMenuItem(children: Children, #[prop(optional, into)] class: String) -> impl IntoView {
     let item_id = use_random_id_for("navitem");
     let item_ctx = NavigationMenuItemContext { item_id };
+    let class = tw_merge!("relative", class);
 
     view! {
         <Provider value=item_ctx>
@@ -248,14 +248,14 @@ pub fn NavigationMenuTrigger(children: Children, #[prop(optional, into)] class: 
 /*                  NAVIGATION MENU CONTENT                    */
 /* ========================================================== */
 
-/// Absolutely positioned relative to NavigationMenu (not NavigationMenuItem),
-/// so all content panels share the same anchor point below the menu bar.
+/// Absolutely positioned relative to the navigation item, so the panel
+/// aligns under its trigger button instead of shifting left on desktop.
 #[component]
 pub fn NavigationMenuContent(children: Children, #[prop(optional, into)] class: String) -> impl IntoView {
     let ctx = expect_context::<NavigationMenuItemContext>();
 
     let class = tw_merge!(
-        "absolute left-0 top-full mt-1.5 z-50 w-full rounded-md border bg-popover p-4 shadow-md data-[state=closed]:hidden md:w-auto",
+        "absolute left-0 top-full mt-1.5 z-50 min-w-full rounded-md border bg-popover p-4 shadow-md data-[state=closed]:hidden md:w-auto",
         class
     );
 

@@ -1,6 +1,4 @@
-pub mod hors_les_murs;
-pub mod en_institution;
-pub mod parents_enfants;
-pub mod ateliers_pour_tous;
+pub mod parents_enfants_moins_6;
+pub mod parents_enfants_6_12;
 pub mod aperos_creatifs;
-pub mod individuels;
+pub mod apres_midis_creatifs;

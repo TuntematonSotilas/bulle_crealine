@@ -62,7 +62,7 @@ mod tests {
     fn session(max_persons: u32, booked_persons: u32) -> SessionView {
         SessionView {
             id: "651d1f0a0000000000000000".to_owned(),
-            service_type: ServiceType::CreatifsPourTous,
+            service_type: ServiceType::ApresMidisCreatifs,
             date_label: "dimanche 5 juillet 2026 à 14h00".to_owned(),
             date_input: "2026-07-05T14:00".to_owned(),
             theme: "Sculpture".to_owned(),

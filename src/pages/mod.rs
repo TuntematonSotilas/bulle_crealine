@@ -15,10 +15,8 @@ pub use qui_suis_je::QuiSuisJePage;
 pub use newsletter::NewsletterPage;
 pub use mentions_legales::MentionsLegales;
 pub use services::{
-    hors_les_murs::AteliersHorsLesMurs,
-    en_institution::AteliersEnInstitution,
     aperos_creatifs::AperosCreatifs,
-    ateliers_pour_tous::AteliersCreatifsPourTous,
-    parents_enfants::AteliersParentsEnfants,
-    individuels::AteliersIndividuels,
+    apres_midis_creatifs::ApresMidisCreatifs,
+    parents_enfants_moins_6::AteliersParentsEnfantsMoinsDe6Ans,
+    parents_enfants_6_12::AteliersParentsEnfants6A12Ans,
 };
