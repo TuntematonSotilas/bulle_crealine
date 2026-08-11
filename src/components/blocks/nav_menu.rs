@@ -21,7 +21,7 @@ fn DesktopNav() -> impl IntoView {
                 <NavigationMenuList>
                     <NavigationMenuItem>
                         <NavigationMenuLink href="/" class=navigation_menu_trigger_style()>
-                            <img src="/assets/icon.svg" alt="Logo" class="w-20 h-20"/>
+                            <img src="/assets/icon.svg" alt="Logo" class="w-16 h-16"/>
                         </NavigationMenuLink>
                     </NavigationMenuItem>
 
@@ -155,7 +155,7 @@ fn MobileNav() -> impl IntoView {
 
         <div class="flex justify-between items-center px-4 py-4 md:hidden">
             <a href="/" aria-label="Accueil">
-                <img src="/assets/icon.svg" alt="Bulle Créaline" class="w-20 h-20"/>
+                <img src="/assets/icon.svg" alt="Bulle Créaline" class="w-16 h-16"/>
             </a>
 
             <div class="flex gap-1 items-center">
@@ -185,7 +185,7 @@ fn MobileNav() -> impl IntoView {
         >
             <div class="flex justify-between items-center px-4 py-4 border-b">
                 <a href="/" aria-label="Accueil" on:click=close>
-                    <img src="/assets/icon.svg" alt="Bulle Créaline" class="w-20 h-20"/>
+                    <img src="/assets/icon.svg" alt="Bulle Créaline" class="w-16 h-16"/>
                 </a>
                 <button
                     type="button"

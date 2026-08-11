@@ -12,4 +12,3 @@ pub mod footer;
 pub mod input;
 pub mod carousel;
 pub mod mask;
-pub mod marquee;
