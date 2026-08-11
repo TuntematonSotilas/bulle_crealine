@@ -16,7 +16,7 @@ pub use mentions_legales::MentionsLegales;
 pub use services::{
     aperos_creatifs::AperosCreatifs,
     apres_midis_creatifs::ApresMidisCreatifs,
-    parents_enfants_moins_6::AteliersParentsEnfantsMoinsDe6Ans,
-    parents_enfants_6_12::AteliersParentsEnfants6A12Ans,
+    parents_enfants_moins_six::AteliersParentsEnfantsMoinsSix,
+    parents_enfants_six_a_douze::AteliersParentsEnfantsSixADouze,
 };
 pub use moi_et_mon_atelier::qui_suis_je::QuiSuisJePage;

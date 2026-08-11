@@ -20,8 +20,8 @@ fn DesktopNav() -> impl IntoView {
             <NavigationMenu>
                 <NavigationMenuList>
                     <NavigationMenuItem>
-                        <NavigationMenuLink href="/" class=navigation_menu_trigger_style()>
-                            <img src="/assets/icon.svg" alt="Logo" class="w-16 h-16"/>
+                        <NavigationMenuLink href="/" class="flex justify-center items-center px-2 h-16 rounded-md transition-colors hover:bg-accent">
+                                <img src="/assets/icon.svg" alt="Logo" class="w-16 h-16"/>
                         </NavigationMenuLink>
                     </NavigationMenuItem>
 
@@ -36,12 +36,12 @@ fn DesktopNav() -> impl IntoView {
                                         </div>
                                         <ul class="mt-2 ml-4 space-y-1 text-sm text-muted-foreground">
                                             <li>
-                                                <a href="/services/parents-enfants-moins-6-ans" class="block py-1 transition-colors hover:text-primary">
+                                                <a href="/services/parents-enfants-moins-six" class="block py-1 transition-colors hover:text-primary">
                                                     "Moins de 6 ans"
                                                 </a>
                                             </li>
                                             <li>
-                                                <a href="/services/parents-enfants-6-12-ans" class="block py-1 transition-colors hover:text-primary">
+                                                <a href="/services/parents-enfants-six-a-douze" class="block py-1 transition-colors hover:text-primary">
                                                     "6 à 12 ans"
                                                 </a>
                                             </li>
@@ -208,12 +208,12 @@ fn MobileNav() -> impl IntoView {
                                 </div>
                                 <ul class="ml-4 mt-1 space-y-1 text-sm text-muted-foreground">
                                     <li>
-                                        <a href="/services/parents-enfants-moins-6-ans" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                        <a href="/services/parents-enfants-moins-six" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
                                             "Moins de 6 ans"
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="/services/parents-enfants-6-12-ans" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                        <a href="/services/parents-enfants-6-a-12" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
                                             "6 à 12 ans"
                                         </a>
                                     </li>
@@ -281,5 +281,45 @@ fn MobileNav() -> impl IntoView {
                 </ul>
             </nav>
         </div>
+    }
+}
+
+#[cfg(all(test, feature = "ssr"))]
+mod tests {
+    use super::*;
+
+    /// The logo is taller than the text triggers beside it, so it must not inherit
+    /// their fixed height, and it must stay out of baseline alignment: an
+    /// `inline-flex` box takes its baseline from the image's bottom edge, which grows
+    /// the row unevenly and knocks the logo off centre.
+    #[test]
+    fn the_logo_link_is_block_level_and_as_tall_as_its_image() {
+        let html = Owner::new().with(|| {
+            // The theme toggle sits in this bar and reads the context `App` provides.
+            provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
+            view! { <DesktopNav/> }.to_html()
+        });
+
+        let logo = html
+            .split("<a ")
+            .find(|fragment| fragment.contains("/assets/icon.svg"))
+            .expect("the logo link should render");
+
+        let class = logo
+            .split_once("class=\"")
+            .and_then(|(_, rest)| rest.split_once('"'))
+            .expect("the logo link should carry classes")
+            .0;
+
+        assert!(class.contains("h-16"), "should match the 64px image: {class}");
+        assert!(!class.contains("h-9"), "should not keep the trigger height: {class}");
+        assert!(
+            class.split_whitespace().any(|name| name == "flex"),
+            "should be block-level flex: {class}"
+        );
+        assert!(
+            !class.split_whitespace().any(|name| name == "inline-flex"),
+            "inline-flex would reintroduce baseline alignment: {class}"
+        );
     }
 }

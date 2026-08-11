@@ -3,11 +3,10 @@ use leptos::prelude::*;
 use crate::components::blocks::service_block::ServiceBlock;
 use crate::models::ServiceType;
 
-/// Renders the "Ateliers parents-enfants" page.
 #[component]
-pub fn AteliersParentsEnfantsMoinsDe6Ans() -> impl IntoView {
+pub fn AteliersParentsEnfantsMoinsSix() -> impl IntoView {
 
-    let title = "Ateliers parents-enfants";
+    let title = "Ateliers parents-enfants (moins de 6 ans)";
     let desc = "Nos ateliers parents-enfants offrent un espace de création commune, favorisant un temps de partage loin des impératifs quotidiens.";
 
     let schedule = "Chaque premier mercredi du mois, de 10h à 12h";
@@ -37,6 +36,6 @@ pub fn AteliersParentsEnfantsMoinsDe6Ans() -> impl IntoView {
             age=age
             place_link=place_link
             steps=steps
-            service=ServiceType::ParentsEnfantsMoinsDe6Ans/>
+            service=ServiceType::ParentsEnfantsMoinsSix/>
     }
 }

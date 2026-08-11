@@ -39,8 +39,8 @@ pub fn App() -> impl IntoView {
             <main class="container mx-auto px-4 py-4 min-h-[72vh]">
                 <Routes fallback=move || "Not found.">
                     <Route path=StaticSegment("") view=HomePage/>
-                    <Route path=path!("/services/parents-enfants-moins-6-ans") view=AteliersParentsEnfantsMoinsDe6Ans/>
-                    <Route path=path!("/services/parents-enfants-6-12-ans") view=AteliersParentsEnfants6A12Ans/>
+                    <Route path=path!("/services/parents-enfants-moins-six") view=AteliersParentsEnfantsMoinsSix/>
+                    <Route path=path!("/services/parents-enfants-six-a-douze") view=AteliersParentsEnfantsSixADouze/>
                     <Route path=path!("/services/apres-midis-creatifs") view=ApresMidisCreatifs/>
                     <Route path=path!("/services/aperos-creatifs") view=AperosCreatifs/>
                     

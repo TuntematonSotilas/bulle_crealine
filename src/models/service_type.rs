@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ServiceType {
-    ParentsEnfantsMoinsDe6Ans,
-    ParentsEnfants6A12Ans,
+    ParentsEnfantsMoinsSix,
+    ParentsEnfantsSixADouze,
     AperosCreatifs,
     ApresMidisCreatifs,
 }
@@ -17,8 +17,8 @@ pub enum ServiceType {
 impl ServiceType {
     /// Every variant, in the order the admin form lists them.
     pub const ALL: [Self; 4] = [
-        Self::ParentsEnfantsMoinsDe6Ans,
-        Self::ParentsEnfants6A12Ans,
+        Self::ParentsEnfantsMoinsSix,
+        Self::ParentsEnfantsSixADouze,
         Self::AperosCreatifs,
         Self::ApresMidisCreatifs,
     ];
@@ -28,8 +28,8 @@ impl ServiceType {
     /// Must stay in step with the `serde` renaming above; a test guards that.
     pub const fn slug(self) -> &'static str {
         match self {
-            Self::ParentsEnfantsMoinsDe6Ans => "parents-enfants-moins-6-ans",
-            Self::ParentsEnfants6A12Ans => "parents-enfants-6-12-ans",
+            Self::ParentsEnfantsMoinsSix => "parents-enfants-moins-six",
+            Self::ParentsEnfantsSixADouze => "parents-enfants-six-a-douze",
             Self::AperosCreatifs => "aperos-creatifs",
             Self::ApresMidisCreatifs => "apres-midis-creatifs"
         }
@@ -38,8 +38,8 @@ impl ServiceType {
     /// Name shown to visitors.
     pub const fn label(self) -> &'static str {
         match self {
-            Self::ParentsEnfantsMoinsDe6Ans => "Ateliers parents-enfants (moins de 6 ans)",
-            Self::ParentsEnfants6A12Ans => "Ateliers parents-enfants (6 à 12 ans)",
+            Self::ParentsEnfantsMoinsSix => "Ateliers parents-enfants (moins de 6 ans)",
+            Self::ParentsEnfantsSixADouze => "Ateliers parents-enfants (6 à 12 ans)",
             Self::AperosCreatifs => "Apéros créatifs (adultes)",
             Self::ApresMidisCreatifs => "Ateliers après-midi créatifs (adultes)",
         }
@@ -48,10 +48,10 @@ impl ServiceType {
     /// Path of the public page describing this kind of workshop.
     pub const fn page_path(self) -> &'static str {
         match self {
-            Self::ParentsEnfantsMoinsDe6Ans => "/services/parents_enfants_moins_6",
-            Self::ParentsEnfants6A12Ans => "/services/parents_enfants_6_12",
-            Self::AperosCreatifs => "/services/aperos_creatifs",
-            Self::ApresMidisCreatifs => "/services/apres_midis_creatifs",
+            Self::ParentsEnfantsMoinsSix => "/services/parents-enfants-moins-six",
+            Self::ParentsEnfantsSixADouze => "/services/parents-enfants-six-a-douze",
+            Self::AperosCreatifs => "/services/aperos-creatifs",
+            Self::ApresMidisCreatifs => "/services/apres-midis-creatifs",
         }
     }
 

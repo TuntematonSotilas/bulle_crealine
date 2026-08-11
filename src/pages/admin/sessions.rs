@@ -12,7 +12,9 @@ use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader
 use crate::components::ui::input::{Input, InputType};
 use crate::components::ui::label::Label;
 use crate::components::ui::number_field::NumberField;
-use crate::components::ui::select::Select;
+use crate::components::ui::select::{
+    Select, SelectContent, SelectGroup, SelectOption, SelectTrigger, SelectValue,
+};
 use crate::components::ui::table::*;
 use crate::models::{ServiceType, SessionView};
 use crate::pages::admin::AdminShell;
@@ -241,20 +243,17 @@ fn SessionForm(
     let id = session.as_ref().map(|s| s.id.clone()).unwrap_or_default();
     let editing_existing = !id.is_empty();
 
-    let options = ServiceType::ALL
-        .into_iter()
-        .map(|kind| {
-            let selected = existing
-                .as_ref()
-                .is_some_and(|session| session.service_type == kind);
+    // A creation starts on the first kind rather than on nothing, so the form always
+    // posts a service; the dropdown carries its value in a hidden input, which the
+    // browser would not enforce as `required`.
+    let selected_kind = existing
+        .as_ref()
+        .map(|session| session.service_type)
+        .unwrap_or(ServiceType::ALL[0]);
 
-            view! {
-                <option value=kind.slug() selected=selected>
-                    {kind.label()}
-                </option>
-            }
-        })
-        .collect::<Vec<_>>();
+    // Built inside the view below, not hoisted into a `let`: a `SelectOption` reads
+    // the context its `Select` provides, so it has to be created while that provider
+    // is on the stack.
 
     view! {
         <Card>
@@ -279,8 +278,32 @@ fn SessionForm(
 
                             <div class="grid gap-3">
                                 <Label r#for="service">"Type d'atelier"</Label>
-                                <Select id="service" name="service" required=true>
-                                    {options}
+                                <Select
+                                    class="w-full"
+                                    name="service".to_string()
+                                    default_value=selected_kind.slug().to_string()
+                                    default_label=selected_kind.label().to_string()
+                                >
+                                    <SelectTrigger id="service">
+                                        <SelectValue placeholder="Type d'atelier"/>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectGroup>
+                                            {ServiceType::ALL
+                                                .into_iter()
+                                                .map(|kind| {
+                                                    view! {
+                                                        <SelectOption
+                                                            value=kind.slug()
+                                                            label=kind.label().to_string()
+                                                        >
+                                                            {kind.label()}
+                                                        </SelectOption>
+                                                    }
+                                                })
+                                                .collect::<Vec<_>>()}
+                                        </SelectGroup>
+                                    </SelectContent>
                                 </Select>
                             </div>
 
@@ -479,5 +502,40 @@ fn AffectedBookings(session_id: String) -> impl IntoView {
                 }
             })}
         </Transition>
+    }
+}
+
+#[cfg(all(test, feature = "ssr"))]
+mod tests {
+    use super::*;
+
+    /// The service dropdown reads a context provided by its own `Select`, which only
+    /// blows up once the form is actually rendered. Nothing about it fails to compile.
+    #[test]
+    fn creation_form_renders_every_service_option() {
+        let html = Owner::new().with(|| {
+            // Bound out here: `view!` would read the turbofish as a tag.
+            let action = ServerAction::<SaveSession>::new();
+            let error: Signal<Option<String>> = Signal::derive(|| None);
+
+            view! {
+                <SessionForm action=action session=None error=error on_cancel=|| {}/>
+            }
+            .to_html()
+        });
+
+        for kind in ServiceType::ALL {
+            assert!(
+                html.contains(kind.label()),
+                "{} should be offered: {html}",
+                kind.label()
+            );
+        }
+        // The first kind stands in for "nothing chosen yet", so the form always posts
+        // a service even though a hidden input cannot be `required`.
+        assert!(
+            html.contains(&format!(r#"value="{}""#, ServiceType::ALL[0].slug())),
+            "the default service should be posted: {html}"
+        );
     }
 }
