@@ -141,7 +141,7 @@ pub fn Select(
         });
     });
 
-    let merged_class = tw_merge!("relative w-fit", class);
+    let merged_class = tw_merge!("relative w-fit min-w-0", class);
 
     view! {
         <Provider value=ctx>
@@ -238,7 +238,7 @@ pub fn SelectContent(
     ctx.position.set(position);
 
     let merged_class = tw_merge!(
-        "min-w-full w-max overflow-auto z-50 p-1 rounded-md border bg-popover text-popover-foreground shadow-md h-fit max-h-[300px] absolute top-[calc(100%+4px)] left-0 data-[position=Above]:top-auto data-[position=Above]:bottom-[calc(100%+4px)] transition-all duration-200 data-[state=closed]:pointer-events-none data-[state=closed]:opacity-0 data-[state=closed]:scale-95 data-[state=open]:opacity-100 data-[state=open]:scale-100 data-[position=Below]:origin-top data-[position=Above]:origin-bottom [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "w-full overflow-auto z-50 p-1 rounded-md border bg-popover text-popover-foreground shadow-md h-fit max-h-[300px] absolute top-[calc(100%+4px)] left-0 data-[position=Above]:top-auto data-[position=Above]:bottom-[calc(100%+4px)] transition-all duration-200 data-[state=closed]:pointer-events-none data-[state=closed]:opacity-0 data-[state=closed]:scale-95 data-[state=open]:opacity-100 data-[state=open]:scale-100 data-[position=Below]:origin-top data-[position=Above]:origin-bottom [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         class
     );
 
@@ -390,9 +390,9 @@ pub fn SelectValue(#[prop(optional, into)] placeholder: String) -> impl IntoView
             data-name="SelectValue"
             class=move || {
                 if ctx.label.get().is_some() {
-                    "text-sm text-foreground truncate"
+                    "min-w-0 text-sm text-foreground truncate"
                 } else {
-                    "text-sm text-muted-foreground truncate"
+                    "min-w-0 text-sm text-muted-foreground truncate"
                 }
             }
         >

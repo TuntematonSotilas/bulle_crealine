@@ -1,6 +1,7 @@
 pub mod alert;
 pub mod button;
 pub mod card;
+pub mod date_picker;
 pub mod label;
 pub mod navigation_menu;
 pub mod number_field;

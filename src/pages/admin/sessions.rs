@@ -9,7 +9,8 @@ use crate::auth::user_message;
 use crate::components::ui::alert::{Alert, AlertDescription, AlertTitle, AlertVariant};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
-use crate::components::ui::input::{Input, InputType};
+use crate::components::ui::date_picker::DateTimeField;
+use crate::components::ui::input::Input;
 use crate::components::ui::label::Label;
 use crate::components::ui::number_field::NumberField;
 use crate::components::ui::select::{
@@ -279,7 +280,7 @@ fn SessionForm(
                             <div class="grid gap-3">
                                 <Label r#for="service">"Type d'atelier"</Label>
                                 <Select
-                                    class="w-full"
+                                    class="w-full max-w-sm"
                                     name="service".to_string()
                                     default_value=selected_kind.slug().to_string()
                                     default_label=selected_kind.label().to_string()
@@ -309,12 +310,10 @@ fn SessionForm(
 
                             <div class="grid gap-3">
                                 <Label r#for="date">"Date et heure"</Label>
-                                <Input
-                                    r#type=InputType::DatetimeLocal
+                                <DateTimeField
                                     id="date"
                                     name="date"
-                                    required=true
-                                    attr:value=session
+                                    value=session
                                         .as_ref()
                                         .map(|s| s.date_input.clone())
                                         .unwrap_or_default()
