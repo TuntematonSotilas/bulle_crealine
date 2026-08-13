@@ -6,9 +6,10 @@ use crate::auth::{LOGIN_PATH, Logout, admin_email};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 
 /// The admin pages, and the label shown in the shell's navigation.
-const PAGES: [(&str, &str); 3] = [
+const PAGES: [(&str, &str); 4] = [
     ("/admin", "Accueil"),
     ("/admin/sessions", "Séances"),
+    ("/admin/themes", "Thèmes"),
     ("/admin/bookings", "Réservations"),
 ];
 

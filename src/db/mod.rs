@@ -11,6 +11,7 @@
 pub mod booking;
 pub mod datetime;
 pub mod session;
+pub mod theme;
 
 use std::env;
 use std::sync::OnceLock;
@@ -20,6 +21,7 @@ use mongodb::{Client, Collection, Database, IndexModel, bson::doc};
 
 use crate::db::booking::BookingDoc;
 use crate::db::session::SessionDoc;
+use crate::db::theme::ThemeDoc;
 
 /// Database holding the sessions and the bookings.
 const DEFAULT_DATABASE: &str = "bulle_crealine_db";
@@ -29,6 +31,9 @@ const SESSIONS: &str = "sessions";
 
 /// Bookings made by visitors.
 const BOOKINGS: &str = "bookings";
+
+/// What the sessions are about: a name and a photo.
+const THEMES: &str = "themes";
 
 static DATABASE: OnceLock<Database> = OnceLock::new();
 
@@ -135,6 +140,11 @@ pub fn bookings() -> Result<Collection<BookingDoc>, DbError> {
     Ok(get().ok_or(DbError::NotConfigured)?.collection(BOOKINGS))
 }
 
+/// The themes collection, or [`DbError::NotConfigured`].
+pub fn themes() -> Result<Collection<ThemeDoc>, DbError> {
+    Ok(get().ok_or(DbError::NotConfigured)?.collection(THEMES))
+}
+
 /// Creates the indexes the queries rely on.
 ///
 /// Creating an index that already exists with the same shape is a no-op, so this
@@ -142,6 +152,7 @@ pub fn bookings() -> Result<Collection<BookingDoc>, DbError> {
 async fn ensure_indexes(database: &Database) -> Result<(), DbError> {
     let sessions: Collection<SessionDoc> = database.collection(SESSIONS);
     let bookings: Collection<BookingDoc> = database.collection(BOOKINGS);
+    let themes: Collection<ThemeDoc> = database.collection(THEMES);
 
     // Serves the public listing: sessions of one kind, upcoming first.
     sessions
@@ -166,6 +177,22 @@ async fn ensure_indexes(database: &Database) -> Result<(), DbError> {
     // Serves the admin listing, newest booking first.
     bookings
         .create_index(IndexModel::builder().keys(doc! { "created_at": -1 }).build())
+        .await?;
+
+    // Two themes with the same name would be indistinguishable in the dropdown that
+    // picks one for a session, so let the index refuse rather than check-then-write.
+    themes
+        .create_index(
+            IndexModel::builder()
+                .keys(doc! { "name": 1 })
+                .options(IndexOptions::builder().unique(true).build())
+                .build(),
+        )
+        .await?;
+
+    // Answers "is any session still using this theme?", which gates its deletion.
+    sessions
+        .create_index(IndexModel::builder().keys(doc! { "theme_id": 1 }).build())
         .await?;
 
     Ok(())

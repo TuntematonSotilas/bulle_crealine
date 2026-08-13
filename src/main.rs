@@ -9,6 +9,7 @@ async fn main() -> std::io::Result<()> {
     use leptos_actix::{generate_route_list, LeptosRoutes};
     use bulle_crealine::app::*;
     use bulle_crealine::auth::{config::AdminConfig, middleware::admin_guard};
+    use bulle_crealine::media;
 
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
@@ -51,6 +52,10 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("/assets", &site_root))
             // serve the favicon from /favicon.ico
             .service(favicon)
+            // serve theme photos, which live in Mongo rather than on disk
+            .route("/media/theme/{id}", web::get().to(media::theme_photo))
+            // photo uploads do not fit under actix's 256 kB default body limit
+            .app_data(web::PayloadConfig::new(media::MAX_BODY_BYTES))
             .leptos_routes(routes, {
                 let leptos_options = leptos_options.clone();
                 move || {

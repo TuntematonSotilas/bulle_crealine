@@ -5,12 +5,12 @@ use leptos_meta::Title;
 use crate::api::sessions::{
     DeleteSession, SaveSession, all_sessions, session_contacts,
 };
+use crate::api::themes::all_themes;
 use crate::auth::user_message;
 use crate::components::ui::alert::{Alert, AlertDescription, AlertTitle, AlertVariant};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 use crate::components::ui::date_picker::DateTimeField;
-use crate::components::ui::input::Input;
 use crate::components::ui::label::Label;
 use crate::components::ui::number_field::NumberField;
 use crate::components::ui::select::{
@@ -177,7 +177,7 @@ fn SessionTable(rows: Vec<SessionView>, editing: RwSignal<Editing>) -> impl Into
             // Read out of `session` before the closures below capture it.
             let date_label = session.date_label.clone();
             let service_label = session.service_type.label();
-            let theme = session.theme.clone();
+            let theme = session.theme_name.clone();
             let price_label = session.price_label();
             let capacity = format!("{} / {}", session.booked_persons, session.max_persons);
 
@@ -252,6 +252,13 @@ fn SessionForm(
         .map(|session| session.service_type)
         .unwrap_or(ServiceType::ALL[0]);
 
+    // Themes are data, not an enum like the service kinds, so the dropdown has to be
+    // fetched. Loaded once per form rather than per render.
+    let themes = Resource::new(|| (), |_| async move { all_themes().await });
+    let selected_theme = existing
+        .as_ref()
+        .map(|session| (session.theme_id.clone(), session.theme_name.clone()));
+
     // Built inside the view below, not hoisted into a `let`: a `SelectOption` reads
     // the context its `Select` provides, so it has to be created while that provider
     // is on the stack.
@@ -322,15 +329,93 @@ fn SessionForm(
 
                             <div class="grid gap-3">
                                 <Label r#for="theme">"Thème"</Label>
-                                <Input
-                                    id="theme"
-                                    name="theme"
-                                    required=true
-                                    attr:value=session
-                                        .as_ref()
-                                        .map(|s| s.theme.clone())
-                                        .unwrap_or_default()
-                                />
+                                <Transition fallback=|| {
+                                    view! {
+                                        <p class="text-sm text-muted-foreground">"Chargement…"</p>
+                                    }
+                                }>
+                                    {move || {
+                                        let selected = selected_theme.clone();
+                                        Suspend::new(async move {
+                                            match themes.await {
+                                                Err(error) => {
+                                                    EitherOf3::A(
+                                                        view! {
+                                                            <Alert variant=AlertVariant::Destructive>
+                                                                {user_message(&error)}
+                                                            </Alert>
+                                                        },
+                                                    )
+                                                }
+                                                // Nothing to pick from: point at the page that
+                                                // fixes it rather than show a dropdown that
+                                                // could not post anything.
+                                                Ok(list) if list.is_empty() => {
+                                                    EitherOf3::B(
+                                                        view! {
+                                                            <Alert>
+                                                                <AlertTitle>"Aucun thème"</AlertTitle>
+                                                                <AlertDescription>
+                                                                    "Créez d'abord un thème pour pouvoir l'associer à une séance. "
+                                                                    <a
+                                                                        href="/admin/themes"
+                                                                        class="underline underline-offset-4"
+                                                                    >
+                                                                        "Gérer les thèmes"
+                                                                    </a>
+                                                                </AlertDescription>
+                                                            </Alert>
+                                                        },
+                                                    )
+                                                }
+                                                Ok(list) => {
+                                                    // Falls back to the first theme, both for a
+                                                    // creation and for a session whose theme has
+                                                    // since been renamed away.
+                                                    let (value, label) = selected
+                                                        .filter(|(id, _)| {
+                                                            list.iter().any(|theme| &theme.id == id)
+                                                        })
+                                                        .unwrap_or_else(|| {
+                                                            (list[0].id.clone(), list[0].name.clone())
+                                                        });
+
+                                                    EitherOf3::C(
+                                                        view! {
+                                                            <Select
+                                                                class="w-full max-w-sm"
+                                                                name="theme_id".to_string()
+                                                                default_value=value
+                                                                default_label=label
+                                                            >
+                                                                <SelectTrigger id="theme">
+                                                                    <SelectValue placeholder="Thème"/>
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectGroup>
+                                                                        {list
+                                                                            .into_iter()
+                                                                            .map(|theme| {
+                                                                                view! {
+                                                                                    <SelectOption
+                                                                                        value=theme.id
+                                                                                        label=theme.name.clone()
+                                                                                    >
+                                                                                        {theme.name}
+                                                                                    </SelectOption>
+                                                                                }
+                                                                            })
+                                                                            .collect::<Vec<_>>()}
+                                                                    </SelectGroup>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        },
+                                                    )
+                                                }
+                                            }
+                                        })
+                                    }}
+                                </Transition>
                             </div>
 
                             <div class="grid gap-3">
@@ -406,7 +491,7 @@ fn DeleteConfirmation(
                         "{} · {} · {}",
                         session.date_label,
                         session.service_type.label(),
-                        session.theme,
+                        session.theme_name,
                     )}
                 </CardDescription>
             </CardHeader>
@@ -512,6 +597,9 @@ mod tests {
     /// blows up once the form is actually rendered. Nothing about it fails to compile.
     #[test]
     fn creation_form_renders_every_service_option() {
+        // The theme dropdown is fetched, so the form owns a `Resource`.
+        crate::pages::admin::init_test_executor();
+
         let html = Owner::new().with(|| {
             // Bound out here: `view!` would read the turbofish as a tag.
             let action = ServerAction::<SaveSession>::new();

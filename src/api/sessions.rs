@@ -46,14 +46,14 @@ pub async fn save_session(
     id: String,
     service: String,
     date: String,
-    theme: String,
+    theme_id: String,
     price: f64,
     max_persons: u32,
 ) -> Result<(), ServerFnError> {
     use crate::api::log_failure;
     use crate::auth::require_admin;
     use crate::db::session::{self, SessionDoc};
-    use crate::db::{booking, datetime};
+    use crate::db::{booking, datetime, theme};
     use crate::models::ServiceType;
 
     require_admin()?;
@@ -62,11 +62,20 @@ pub async fn save_session(
         .ok_or_else(|| ServerFnError::new("Choisissez un type d'atelier."))?;
     let date = datetime::parse_input(&date)
         .ok_or_else(|| ServerFnError::new("Cette date n'est pas valide."))?;
-    let theme = theme.trim().to_owned();
 
-    if theme.is_empty() {
-        return Err(ServerFnError::new("Indiquez un thème."));
+    // Checked against the collection, not just parsed: a stale dropdown could still
+    // post a theme that has since been deleted, and the listing would then show the
+    // session with no theme at all.
+    let theme_id = session::parse_id(theme_id.trim())
+        .map_err(|_| ServerFnError::new("Choisissez un thème."))?;
+    if theme::find(theme_id)
+        .await
+        .map_err(|error| log_failure("checking the theme of a session", error))?
+        .is_none()
+    {
+        return Err(ServerFnError::new("Ce thème n'existe plus."));
     }
+
     if !price.is_finite() || price < 0.0 {
         return Err(ServerFnError::new("Ce prix n'est pas valide."));
     }
@@ -80,7 +89,7 @@ pub async fn save_session(
         id: None,
         service_type,
         date,
-        theme,
+        theme_id,
         price,
         max_persons,
     };
@@ -156,18 +165,32 @@ pub async fn session_contacts(id: String) -> Result<Vec<BookingContact>, ServerF
         .collect())
 }
 
-/// Resolves how many people each session already carries, in one round trip.
+/// Resolves how many people each session carries and what its theme is called,
+/// in one round trip each rather than one per session.
 #[cfg(feature = "ssr")]
 async fn with_booked_persons(
     sessions: Vec<crate::db::session::SessionDoc>,
 ) -> Result<Vec<SessionView>, ServerFnError> {
+    use std::collections::HashMap;
+
     use crate::api::log_failure;
-    use crate::db::booking;
+    use crate::db::{booking, theme};
 
     let ids = sessions.iter().filter_map(|session| session.id).collect();
     let booked = booking::booked_persons_by_session(ids)
         .await
         .map_err(|error| log_failure("summing bookings per session", error))?;
+
+    let mut theme_ids: Vec<_> = sessions.iter().map(|session| session.theme_id).collect();
+    theme_ids.sort_unstable();
+    theme_ids.dedup();
+
+    let names: HashMap<_, _> = theme::find_many(theme_ids)
+        .await
+        .map_err(|error| log_failure("resolving the themes of a list of sessions", error))?
+        .into_iter()
+        .map(|found| (found.id, found.name))
+        .collect();
 
     Ok(sessions
         .iter()
@@ -177,7 +200,7 @@ async fn with_booked_persons(
                 .and_then(|id| booked.get(&id).copied())
                 .unwrap_or(0);
 
-            session.to_view(taken)
+            session.to_view(taken, names.get(&session.theme_id).map(String::as_str))
         })
         .collect())
 }

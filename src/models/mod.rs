@@ -7,9 +7,11 @@
 pub mod booking;
 pub mod service_type;
 pub mod session;
+pub mod theme;
 
 pub use booking::{
     BookingContact, BookingProblem, BookingRequest, BookingView, MAX_PERSONS_PER_BOOKING,
 };
 pub use service_type::ServiceType;
 pub use session::SessionView;
+pub use theme::{AffectedSession, MAX_PHOTO_BYTES, MAX_PHOTO_LABEL, ThemeView};

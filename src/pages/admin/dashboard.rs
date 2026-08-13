@@ -29,6 +29,20 @@ pub fn AdminPage() -> impl IntoView {
 
                 <Card>
                     <CardHeader>
+                        <CardTitle>"Thèmes"</CardTitle>
+                        <CardDescription>
+                            "Gérer les thèmes, leur nom et leur photo, avant de les associer aux séances."
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <a href="/admin/themes" class="text-sm underline underline-offset-4">
+                            "Gérer les thèmes"
+                        </a>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
                         <CardTitle>"Réservations"</CardTitle>
                         <CardDescription>
                             "Consulter les inscriptions et y attacher une note interne."

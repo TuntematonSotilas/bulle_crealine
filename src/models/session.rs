@@ -16,7 +16,10 @@ pub struct SessionView {
     pub date_label: String,
     /// `"2026-07-05T14:00"`, ready for an `<input type="datetime-local">`.
     pub date_input: String,
-    pub theme: String,
+    /// Hex id of the theme, which is what the admin form posts back.
+    pub theme_id: String,
+    /// Name of that theme, resolved server-side so no page has to join anything.
+    pub theme_name: String,
     pub price: f64,
     /// How many people the session can take in total.
     pub max_persons: u32,
@@ -65,7 +68,8 @@ mod tests {
             service_type: ServiceType::ApresMidisCreatifs,
             date_label: "dimanche 5 juillet 2026 à 14h00".to_owned(),
             date_input: "2026-07-05T14:00".to_owned(),
-            theme: "Sculpture".to_owned(),
+            theme_id: "651d1f0a0000000000000001".to_owned(),
+            theme_name: "Sculpture".to_owned(),
             price: 65.0,
             max_persons,
             booked_persons,

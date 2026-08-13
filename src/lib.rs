@@ -6,6 +6,8 @@ pub mod auth;
 pub mod components;
 #[cfg(feature = "ssr")]
 pub mod db;
+#[cfg(feature = "ssr")]
+pub mod media;
 pub mod models;
 pub mod pages;
 

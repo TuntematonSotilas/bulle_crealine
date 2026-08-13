@@ -6,6 +6,7 @@
 
 pub mod bookings;
 pub mod sessions;
+pub mod themes;
 
 /// Shown when Mongo is unreachable or misconfigured.
 ///

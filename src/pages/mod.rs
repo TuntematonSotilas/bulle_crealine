@@ -7,7 +7,9 @@ pub mod services;
 pub mod mentions_legales;
 pub mod moi_et_mon_atelier;
 
-pub use admin::{AdminBookingsPage, AdminLoginPage, AdminPage, AdminSessionsPage};
+pub use admin::{
+    AdminBookingsPage, AdminLoginPage, AdminPage, AdminSessionsPage, AdminThemesPage,
+};
 pub use booking::BookingPage;
 pub use home::HomePage;
 pub use not_found::NotFound;

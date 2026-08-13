@@ -148,7 +148,7 @@ fn BookingForm(service: ServiceType, sessions: Vec<SessionView>) -> impl IntoVie
                     <span class="flex flex-col gap-1">
                         <span class="font-medium">{session.date_label.clone()}</span>
                         <span class="text-sm text-muted-foreground">
-                            "Thème : "{session.theme.clone()}" · "{session.price_label()}
+                            "Thème : "{session.theme_name.clone()}" · "{session.price_label()}
                         </span>
                         <span class=move || {
                             if full {

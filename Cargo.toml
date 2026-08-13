@@ -18,13 +18,13 @@ mongodb = { version = "3.8.0", optional = true }
 serde = { version = "1.0.229", features = ["derive"] }
 sha2 = { version = "0.10.9", optional = true }
 console_error_panic_hook = "0.1"
-leptos = { version = "0.8.7" }
+leptos = { version = "0.8.7", features = ["multipart"] }
 leptos_meta = { version = "0.8.6" }
 leptos_actix = { version = "0.8.7", optional = true, default-features = false }
 leptos_router = { version = "0.8.7" }
 leptos_ui = "0.3.22"
 wasm-bindgen = "0.2.106"
-web-sys = { version = "0.3.97" , features = ["MediaQueryList", "Window", "Storage", "Element", "Event", "Node", "DomRect"] }
+web-sys = { version = "0.3.97" , features = ["MediaQueryList", "Window", "Storage", "Element", "Event", "Node", "DomRect", "FormData", "HtmlFormElement", "File", "FileList", "HtmlInputElement"] }
 tw_merge = { version = "0.1.21", features = ["variant"] }
 icons = { version = "0.18.2", features = ["leptos"] }
 strum = "0.28.0"
@@ -51,6 +51,9 @@ ssr = [
 
 [dev-dependencies]
 serde_json = "1.0"
+# Rendering a component that owns a `Resource` needs a spawner; leptos pulls this
+# crate in already, tests just need to name it to start one.
+any_spawner = { version = "0.3.0", features = ["futures-executor"] }
 
 # Generates ADMIN_PASSWORD_HASH and ADMIN_SESSION_SECRET (see README).
 [[example]]

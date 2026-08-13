@@ -94,7 +94,7 @@ pub async fn all_bookings() -> Result<Vec<BookingView>, ServerFnError> {
 
     use crate::api::log_failure;
     use crate::auth::require_admin;
-    use crate::db::{booking, datetime, session};
+    use crate::db::{booking, datetime, session, theme};
 
     require_admin()?;
 
@@ -108,6 +108,18 @@ pub async fn all_bookings() -> Result<Vec<BookingView>, ServerFnError> {
     let sessions = session::find_many(session_ids)
         .await
         .map_err(|error| log_failure("loading the sessions of the bookings", error))?;
+
+    // A second hop for the themes, for the same reason.
+    let mut theme_ids: Vec<_> = sessions.iter().map(|session| session.theme_id).collect();
+    theme_ids.sort_unstable();
+    theme_ids.dedup();
+    let theme_names: HashMap<_, _> = theme::find_many(theme_ids)
+        .await
+        .map_err(|error| log_failure("loading the themes of the bookings", error))?
+        .into_iter()
+        .map(|found| (found.id, found.name))
+        .collect();
+
     let sessions: HashMap<_, _> = sessions
         .into_iter()
         .filter_map(|session| session.id.map(|id| (id, session)))
@@ -128,7 +140,7 @@ pub async fn all_bookings() -> Result<Vec<BookingView>, ServerFnError> {
                     .map(|session| datetime::to_label(session.date))
                     .unwrap_or_else(|| "Séance supprimée".to_owned()),
                 session_theme: session
-                    .map(|session| session.theme.clone())
+                    .and_then(|session| theme_names.get(&session.theme_id).cloned())
                     .unwrap_or_default(),
                 name: booking.name,
                 email: booking.email,

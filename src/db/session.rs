@@ -16,7 +16,8 @@ pub struct SessionDoc {
     pub service_type: ServiceType,
     /// French wall-clock time, stored verbatim; see [`crate::db::datetime`].
     pub date: DateTime,
-    pub theme: String,
+    /// The theme this session is about, in [`crate::db::theme`].
+    pub theme_id: ObjectId,
     pub price: f64,
     /// How many people the session can take in total.
     pub max_persons: u32,
@@ -24,14 +25,20 @@ pub struct SessionDoc {
 
 impl SessionDoc {
     /// Turns the document into what the browser gets, given how many people are
-    /// already booked on it.
-    pub fn to_view(&self, booked_persons: u32) -> SessionView {
+    /// already booked on it and the name of the theme it points at.
+    ///
+    /// `theme_name` is passed in rather than looked up here so that listing sessions
+    /// resolves every theme in one round trip. It falls back to a marker when the
+    /// theme is missing: deleting a referenced theme is refused, so that only happens
+    /// if the collection was edited by hand.
+    pub fn to_view(&self, booked_persons: u32, theme_name: Option<&str>) -> SessionView {
         SessionView {
             id: self.id.map(|id| id.to_hex()).unwrap_or_default(),
             service_type: self.service_type,
             date_label: datetime::to_label(self.date),
             date_input: datetime::to_input(self.date),
-            theme: self.theme.clone(),
+            theme_id: self.theme_id.to_hex(),
+            theme_name: theme_name.unwrap_or("Thème supprimé").to_owned(),
             price: self.price,
             max_persons: self.max_persons,
             booked_persons,
@@ -93,6 +100,25 @@ pub async fn find_many(ids: Vec<ObjectId>) -> Result<Vec<SessionDoc>, DbError> {
     Ok(found)
 }
 
+/// How many sessions point at a theme.
+///
+/// Gates deleting that theme: a session whose theme is gone has nothing to show.
+pub async fn count_for_theme(theme_id: ObjectId) -> Result<u64, DbError> {
+    Ok(sessions()?.count_documents(doc! { "theme_id": theme_id }).await?)
+}
+
+/// The sessions using a theme, soonest first, to spell out what changing it affects.
+pub async fn list_for_theme(theme_id: ObjectId) -> Result<Vec<SessionDoc>, DbError> {
+    let found = sessions()?
+        .find(doc! { "theme_id": theme_id })
+        .sort(doc! { "date": 1 })
+        .await?
+        .try_collect()
+        .await?;
+
+    Ok(found)
+}
+
 /// Stores a new session and returns its id.
 pub async fn insert(session: &SessionDoc) -> Result<ObjectId, DbError> {
     let inserted = sessions()?.insert_one(session).await?;
@@ -109,7 +135,7 @@ pub async fn update(id: ObjectId, session: &SessionDoc) -> Result<(), DbError> {
         "$set": {
             "service_type": session.service_type.slug(),
             "date": session.date,
-            "theme": &session.theme,
+            "theme_id": session.theme_id,
             "price": session.price,
             "max_persons": session.max_persons,
         }
