@@ -2,8 +2,9 @@ use leptos::either::Either;
 use leptos::prelude::*;
 use leptos_router::components::Redirect;
 
-use crate::auth::{LOGIN_PATH, Logout, admin_email};
+use crate::auth::{ADMIN_PATH, LOGIN_PATH, Logout, admin_email};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
+use crate::pages::admin::easter_egg::NavSprite;
 
 /// The admin pages, and the label shown in the shell's navigation.
 const PAGES: [(&str, &str); 4] = [
@@ -70,6 +71,9 @@ fn Frame(
 ) -> impl IntoView {
     let logout = ServerAction::<Logout>::new();
 
+    // Read before the links borrow `current` below.
+    let on_dashboard = has_easter_egg(&current);
+
     let links = PAGES
         .into_iter()
         .map(|(path, label)| {
@@ -107,10 +111,44 @@ fn Frame(
                 </ActionForm>
             </div>
 
-            <nav class="flex flex-wrap gap-1 pb-2 border-b">{links}</nav>
+            // `relative` so the easter egg below has something to pace along.
+            <nav class="flex relative flex-wrap gap-1 pb-2 border-b">
+                {links}
+                {on_dashboard.then(|| view! { <NavSprite/> })}
+            </nav>
 
             {children()}
 
         </div>
+    }
+}
+
+/// Whether a page carries the [`NavSprite`] easter egg: the dashboard, and only it.
+fn has_easter_egg(path: &str) -> bool {
+    path == ADMIN_PATH
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_dashboard_carries_the_easter_egg() {
+        assert!(has_easter_egg(ADMIN_PATH));
+
+        for (path, _) in PAGES.into_iter().filter(|(path, _)| *path != ADMIN_PATH) {
+            assert!(!has_easter_egg(path), "{path} should not carry it");
+        }
+        assert!(!has_easter_egg(LOGIN_PATH), "nor the login page");
+    }
+
+    /// Every navigation entry has to be a page that exists, or the shell would link
+    /// into the router's fallback.
+    #[test]
+    fn every_navigation_entry_is_under_the_admin_area() {
+        for (path, label) in PAGES {
+            assert!(path.starts_with(ADMIN_PATH), "{path} is not an admin path");
+            assert!(!label.is_empty(), "{path} has no label");
+        }
     }
 }

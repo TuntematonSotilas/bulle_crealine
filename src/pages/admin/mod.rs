@@ -1,5 +1,6 @@
 pub mod bookings;
 pub mod dashboard;
+pub mod easter_egg;
 pub mod login;
 pub mod sessions;
 pub mod shell;
