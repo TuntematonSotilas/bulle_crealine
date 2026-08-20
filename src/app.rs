@@ -36,7 +36,7 @@ pub fn App() -> impl IntoView {
         // content for this welcome page
         <Router>
             <NavMenu/>
-            <main class="container mx-auto px-4 py-4 min-h-[72vh]">
+            <main class="container mx-auto px-4 py-4 min-h-[72vh] bubbles">
                 <Routes fallback=move || "Not found.">
                     <Route path=StaticSegment("") view=HomePage/>
                     <Route path=path!("/services/parents-enfants-moins-six") view=AteliersParentsEnfantsMoinsSix/>

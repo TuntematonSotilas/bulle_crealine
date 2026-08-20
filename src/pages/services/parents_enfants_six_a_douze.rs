@@ -23,14 +23,9 @@ pub fn AteliersParentsEnfantsSixADouze() -> impl IntoView {
         "Temps de partage et d'échange autour des créations",
         "Clôture de la séance et prise de retours"
     ].into_iter().map(String::from).collect::<Vec<String>>();
-    let pics = vec![
-        "/assets/fake1.png".to_string(),
-        "/assets/fake2.png".to_string(),
-    ];
     view! {
         <ServiceBlock title=title 
             description=desc
-            pictures=pics
             schedule=schedule
             place=place
             age=age

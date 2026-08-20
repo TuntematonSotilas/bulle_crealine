@@ -10,6 +10,7 @@ variants! {
                 Destructive: "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
                 Outline: "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/5",
                 Secondary: "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
+                Tertiary: "bg-tertiary text-tertiary-foreground shadow-xs hover:bg-tertiary/90",
                 Ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
                 Accent: "bg-accent text-accent-foreground hover:bg-accent/80",
                 Link: "text-primary underline-offset-4 hover:underline",
@@ -25,7 +26,8 @@ variants! {
                 Icon: "size-9",
                 //
                 Mobile: "px-6 py-3 rounded-[24px]",
-                Badge: "px-2.5 py-0.5 text-xs"
+                Badge: "px-2.5 py-0.5 text-xs",
+                Pill: "h-14 px-10 rounded-full text-base"
             }
         },
         component: {

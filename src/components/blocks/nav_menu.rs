@@ -36,12 +36,12 @@ fn DesktopNav() -> impl IntoView {
                                         </div>
                                         <ul class="mt-2 ml-4 space-y-1 text-sm text-muted-foreground">
                                             <li>
-                                                <a href="/services/parents-enfants-moins-six" class="block py-1 transition-colors hover:text-primary">
+                                                <a href="/services/parents-enfants-moins-six" class="block rounded-md px-3 py-2 leading-none no-underline transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
                                                     "Moins de 6 ans"
                                                 </a>
                                             </li>
                                             <li>
-                                                <a href="/services/parents-enfants-six-a-douze" class="block py-1 transition-colors hover:text-primary">
+                                                <a href="/services/parents-enfants-six-a-douze" class="block rounded-md px-3 py-2 leading-none no-underline transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
                                                     "6 à 12 ans"
                                                 </a>
                                             </li>
@@ -52,13 +52,13 @@ fn DesktopNav() -> impl IntoView {
                                             "Ateliers adultes"
                                         </div>
                                         <ul class="mt-2 ml-4 space-y-1 text-sm text-muted-foreground">
-                                            <li class="p-1">
-                                                <a href="/services/aperos-creatifs" class="block text-sm font-medium leading-none transition-colors hover:text-primary">
+                                            <li>
+                                                <a href="/services/aperos-creatifs" class="block rounded-md px-3 py-2 leading-none no-underline transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
                                                     "Apéros créatifs"
                                                 </a>
                                             </li>
-                                            <li class="p-1">
-                                                <a href="/services/apres-midis-creatifs" class="block text-sm font-medium leading-none transition-colors hover:text-primary">
+                                            <li>
+                                                <a href="/services/apres-midis-creatifs" class="block rounded-md px-3 py-2 leading-none no-underline transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
                                                     "Après-midis créatifs"
                                                 </a>
                                             </li>

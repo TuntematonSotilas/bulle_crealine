@@ -5,3 +5,27 @@
 .no-tooltips {
     pointer-events: none;
 }
+
+/* Decorative bubbles: two in the top-right corner, two in the bottom-left.
+   Drawn as radial gradients rather than as elements, so a section opts in with
+   one class and no extra markup, screen readers see nothing, and no
+   `overflow: hidden` is needed -- a background is clipped to the box already.
+   Colours come from --bubble / --bubble-alt, so this follows the theme.
+   Every circle sits fully inside the box on purpose: one hanging off an edge
+   gets clipped to a flat-sided blob that reads as a rendering glitch. Where
+   content covers a circle it just stays hidden behind it, which is why the
+   top-right pair is invisible on pages whose corner is already occupied. */
+.bubbles {
+    background-image:
+        radial-gradient(circle closest-side, var(--bubble) 99%, transparent 100%),
+        radial-gradient(circle closest-side, var(--bubble-alt) 99%, transparent 100%),
+        radial-gradient(circle closest-side, var(--bubble) 99%, transparent 100%),
+        radial-gradient(circle closest-side, var(--bubble-alt) 99%, transparent 100%);
+    background-repeat: no-repeat;
+    background-size: 10rem 10rem, 3rem 3rem, 5.5rem 5.5rem, 2rem 2rem;
+    background-position:
+        right 2rem top 1.5rem,
+        right 13rem top 3rem,
+        left 1.5rem bottom 2rem,
+        left 7.5rem bottom 3.5rem;
+}

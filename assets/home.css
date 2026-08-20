@@ -7,3 +7,10 @@
   text-align: center;
   overflow: hidden;
 }
+
+.home-hero-title {
+  font-size: 2.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--heading);
+}
