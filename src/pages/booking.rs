@@ -212,14 +212,13 @@ fn BookingForm(service: ServiceType, sessions: Vec<SessionView>) -> impl IntoVie
                                 </div>
 
                                 <div class="grid gap-3">
-                                    <Label r#for="email">"Adresse e-mail"</Label>
+                                    <Label r#for="email">"Adresse e-mail (facultatif)"</Label>
                                     <Input
                                         r#type=InputType::Email
                                         id="email"
                                         name="email"
                                         placeholder="vous@exemple.fr"
                                         autocomplete="email"
-                                        required=true
                                     />
                                 </div>
 
@@ -323,5 +322,66 @@ fn BookingConfirmed(service: ServiceType, session_label: String) -> impl IntoVie
                 </div>
             </CardContent>
         </Card>
+    }
+}
+
+#[cfg(all(test, feature = "ssr"))]
+mod tests {
+    use super::*;
+
+    fn session() -> SessionView {
+        SessionView {
+            id: "651d1f0a0000000000000001".to_owned(),
+            service_type: ServiceType::AperosCreatifs,
+            date_label: "dimanche 5 juillet 2026 à 14h00".to_owned(),
+            date_input: "2026-07-05T14:00".to_owned(),
+            theme_id: "651d1f0a0000000000000002".to_owned(),
+            theme_name: "Aquarelle".to_owned(),
+            price: 65.0,
+            max_persons: 8,
+            booked_persons: 2,
+        }
+    }
+
+    fn form_html() -> String {
+        Owner::new().with(|| {
+            view! {
+                <BookingForm service=ServiceType::AperosCreatifs sessions=vec![session()]/>
+            }
+            .to_html()
+        })
+    }
+
+    /// The rendered `<input>` carrying this id, so an assertion about one field
+    /// cannot pass on an attribute belonging to another.
+    fn input_with_id(html: &str, id: &str) -> String {
+        let needle = format!(r#"id="{id}""#);
+
+        html.split('<')
+            .find(|element| element.starts_with("input") && element.contains(&needle))
+            .unwrap_or_else(|| panic!("no input carries id {id:?}: {html}"))
+            .to_owned()
+    }
+
+    /// The phone number replaced the address as the field we insist on, so the two
+    /// have to disagree about being required.
+    #[test]
+    fn the_phone_is_required_and_the_email_is_not() {
+        let html = form_html();
+
+        let phone = input_with_id(&html, "phone");
+        assert!(phone.contains("required"), "the phone should be required: {phone}");
+
+        let email = input_with_id(&html, "email");
+        assert!(!email.contains("required"), "the email should be optional: {email}");
+    }
+
+    /// A field that no longer refuses to submit has to say so, or it still reads
+    /// as mandatory.
+    #[test]
+    fn the_email_label_says_it_is_optional() {
+        let html = form_html();
+
+        assert!(html.contains("Adresse e-mail (facultatif)"), "{html}");
     }
 }

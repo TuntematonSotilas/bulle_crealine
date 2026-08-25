@@ -25,9 +25,12 @@ pub struct BookingRequest {
 pub enum BookingProblem {
     NoSession,
     MissingName,
-    MissingEmail,
+    /// Only ever raised for a non-empty address: giving none is allowed.
     MalformedEmail,
     MissingPhone,
+    /// Digits are what [`phone_key`] keeps, and a number without any of them
+    /// would key as the empty string and collide with every other such number.
+    MalformedPhone,
     NoPersons,
     TooManyPersons,
 }
@@ -38,9 +41,9 @@ impl BookingProblem {
         match self {
             Self::NoSession => "Choisissez une séance.",
             Self::MissingName => "Indiquez votre nom.",
-            Self::MissingEmail => "Indiquez votre adresse e-mail.",
             Self::MalformedEmail => "Cette adresse e-mail semble incorrecte.",
             Self::MissingPhone => "Indiquez votre numéro de téléphone.",
+            Self::MalformedPhone => "Ce numéro de téléphone semble incorrect.",
             Self::NoPersons => "Il faut au moins une personne.",
             Self::TooManyPersons => "Contactez-nous directement pour un groupe de cette taille.",
         }
@@ -72,14 +75,17 @@ impl BookingRequest {
         if self.name.is_empty() {
             return Err(BookingProblem::MissingName);
         }
-        if self.email.is_empty() {
-            return Err(BookingProblem::MissingEmail);
-        }
-        if !looks_like_an_email(&self.email) {
+        // The address is optional: the phone number is what we reach people on,
+        // and what tells two bookings apart. Its shape is still checked, but only
+        // once one was actually given.
+        if !self.email.is_empty() && !looks_like_an_email(&self.email) {
             return Err(BookingProblem::MalformedEmail);
         }
         if self.phone.is_empty() {
             return Err(BookingProblem::MissingPhone);
+        }
+        if phone_key(&self.phone).is_empty() {
+            return Err(BookingProblem::MalformedPhone);
         }
         if self.persons == 0 {
             return Err(BookingProblem::NoPersons);
@@ -90,6 +96,19 @@ impl BookingRequest {
 
         Ok(())
     }
+}
+
+/// Canonical form of a phone number, and a booking's identity on a session.
+///
+/// Digits only, so `"06 12 34 56 78"`, `"06.12.34.56.78"` and `"0612345678"` all
+/// land on one key. Without this the unique index would compare what was typed,
+/// and the same number spelled two ways would slip past it.
+///
+/// Deliberately short of full E.164 normalization: `"+33 6 12 34 56 78"` keys as
+/// `"33612345678"` and so does not meet its national spelling. Reconciling the
+/// two needs a country to assume, which this form never asks for.
+pub fn phone_key(phone: &str) -> String {
+    phone.chars().filter(char::is_ascii_digit).collect()
 }
 
 /// Exactly one `@`, something on each side, and a dot in the domain.
@@ -177,13 +196,61 @@ mod tests {
         let cases = [
             ("session", BookingRequest { session_id: String::new(), ..request() }, BookingProblem::NoSession),
             ("name", BookingRequest { name: String::new(), ..request() }, BookingProblem::MissingName),
-            ("email", BookingRequest { email: String::new(), ..request() }, BookingProblem::MissingEmail),
             ("phone", BookingRequest { phone: String::new(), ..request() }, BookingProblem::MissingPhone),
         ];
 
         for (field, form, expected) in cases {
             assert_eq!(form.validate(), Err(expected), "missing {field} slipped through");
         }
+    }
+
+    /// The phone number carries the requirement the address used to.
+    #[test]
+    fn accepts_a_booking_without_an_email() {
+        let form = BookingRequest { email: String::new(), ..request() };
+
+        assert_eq!(form.validate(), Ok(()));
+    }
+
+    /// Optional is not unchecked: a typed address still has to look like one, or
+    /// it would be stored unusable.
+    #[test]
+    fn still_rejects_a_malformed_email_when_one_is_given() {
+        let form = BookingRequest { email: "not-an-address".to_owned(), ..request() };
+
+        assert_eq!(form.validate(), Err(BookingProblem::MalformedEmail));
+    }
+
+    /// Whitespace is not an address: normalization has to turn it into the empty,
+    /// accepted case rather than leave it to trip the shape check.
+    #[test]
+    fn a_blank_email_normalizes_to_no_email() {
+        let form = BookingRequest { email: "   ".to_owned(), ..request() };
+        let clean = form.normalized();
+
+        assert_eq!(clean.email, "");
+        assert_eq!(clean.validate(), Ok(()));
+    }
+
+    /// One number spelled several ways has to reach one key, or the unique index
+    /// would let the same person book a session twice.
+    #[test]
+    fn one_number_spelled_differently_gives_one_key() {
+        let canonical = phone_key("0612345678");
+
+        for spelling in ["06 12 34 56 78", "06.12.34.56.78", "06-12-34-56-78", " 0612345678 "] {
+            assert_eq!(phone_key(spelling), canonical, "{spelling:?} should match");
+        }
+    }
+
+    /// A number without a digit would key as the empty string, and every such
+    /// booking would then look like a repeat of the first.
+    #[test]
+    fn rejects_a_phone_number_carrying_no_digit() {
+        let form = BookingRequest { phone: "à rappeler".to_owned(), ..request() };
+
+        assert_eq!(form.validate(), Err(BookingProblem::MalformedPhone));
+        assert!(phone_key("à rappeler").is_empty());
     }
 
     #[test]

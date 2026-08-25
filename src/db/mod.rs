@@ -16,6 +16,7 @@ pub mod theme;
 use std::env;
 use std::sync::OnceLock;
 
+use futures_util::TryStreamExt;
 use mongodb::options::{IndexOptions, ServerApi, ServerApiVersion};
 use mongodb::{Client, Collection, Database, IndexModel, bson::doc};
 
@@ -35,11 +36,16 @@ const BOOKINGS: &str = "bookings";
 /// What the sessions are about: a name and a photo.
 const THEMES: &str = "themes";
 
-/// Unique index over the live bookings of one session.
-const ACTIVE_BOOKING_INDEX: &str = "session_id_1_email_1_active";
+/// Unique index over the live bookings of one session, keyed by phone number.
+const ACTIVE_BOOKING_INDEX: &str = "session_id_1_phone_key_1_active";
 
-/// The name Mongo gave the unqualified index this replaced.
-const LEGACY_BOOKING_INDEX: &str = "session_id_1_email_1";
+/// Index names from when the address carried a booking's identity. Dropped at
+/// startup: with the address now optional they would file every blank-address
+/// booking under the empty string and reject the second one.
+///
+/// The first is what Mongo auto-named the original; the second its successor
+/// scoped to the live bookings.
+const STALE_EMAIL_INDEXES: [&str; 2] = ["session_id_1_email_1", "session_id_1_email_1_active"];
 
 static DATABASE: OnceLock<Database> = OnceLock::new();
 
@@ -169,14 +175,11 @@ async fn ensure_indexes(database: &Database) -> Result<(), DbError> {
         )
         .await?;
 
-    // Turns "this address already booked this session" into a guarantee rather
-    // than a check that two simultaneous requests could both pass.
-    //
-    // Scoped to the live bookings: once a booking is deleted the address is free
-    // to book that session again. The partial filter tests `false` rather than
-    // `$ne: true` because a partialFilterExpression accepts no `$ne`, hence the
-    // backfill just above — a legacy document with no field would otherwise fall
-    // outside the index and escape the constraint entirely.
+    // Brings the documents written before soft deletion existed in line with the
+    // field, so the partial filter below covers every booking. It has to test
+    // `false` rather than `$ne: true`, because a partialFilterExpression accepts
+    // no `$ne` — a document with no field would otherwise fall outside the index
+    // and escape the constraint entirely.
     bookings
         .update_many(
             doc! { "is_deleted": { "$exists": false } },
@@ -184,32 +187,67 @@ async fn ensure_indexes(database: &Database) -> Result<(), DbError> {
         )
         .await?;
 
-    bookings
-        .create_index(
-            IndexModel::builder()
-                .keys(doc! { "session_id": 1, "email": 1 })
-                .options(
-                    IndexOptions::builder()
-                        .name(ACTIVE_BOOKING_INDEX.to_owned())
-                        .unique(true)
-                        .partial_filter_expression(doc! { "is_deleted": false })
-                        .build(),
-                )
-                .build(),
-        )
+    // Same for the phone key: documents written while the address carried the
+    // identity have none, and the index would file them all under the empty
+    // string. Derived in Rust rather than in an aggregation pipeline, which would
+    // take a chain of `$replaceAll` per separator, and only over the documents
+    // still missing it — a no-op query from the second boot on.
+    let unkeyed: Vec<BookingDoc> = bookings
+        .find(doc! { "phone_key": { "$in": [null, ""] } })
+        .await?
+        .try_collect()
         .await?;
 
-    // The unqualified index this replaces would still refuse a second booking
-    // after the first was deleted. Dropped only once the partial one is in place,
-    // so the uniqueness guarantee is never lifted, and only when actually there,
-    // which makes this a no-op from the second boot on.
-    if bookings
-        .list_index_names()
-        .await?
-        .iter()
-        .any(|name| name == LEGACY_BOOKING_INDEX)
-    {
-        bookings.drop_index(LEGACY_BOOKING_INDEX).await?;
+    for booking in unkeyed {
+        let Some(id) = booking.id else { continue };
+
+        bookings
+            .update_one(
+                doc! { "_id": id },
+                doc! { "$set": { "phone_key": crate::models::phone_key(&booking.phone) } },
+            )
+            .await?;
+    }
+
+    // Turns "this number already booked this session" into a guarantee rather
+    // than a check two simultaneous requests could both pass. Keyed on the phone
+    // number because that is the field every booking now has.
+    //
+    // Scoped to the live bookings, so deleting one frees the number to book that
+    // session again.
+    let by_phone = IndexModel::builder()
+        .keys(doc! { "session_id": 1, "phone_key": 1 })
+        .options(
+            IndexOptions::builder()
+                .name(ACTIVE_BOOKING_INDEX.to_owned())
+                .unique(true)
+                .partial_filter_expression(doc! { "is_deleted": false })
+                .build(),
+        )
+        .build();
+
+    // Existing data can already hold two live bookings that key alike, and Mongo
+    // then refuses to build the index. Reported rather than propagated: a failed
+    // `init` takes the whole database offline, which is a far worse outcome than
+    // running without this one guarantee.
+    if let Err(error) = bookings.create_index(by_phone).await {
+        if is_duplicate_key(&error) {
+            eprintln!(
+                "the unique booking index was not built: two live bookings on one session \
+                 already share a phone number. Resolve them, then restart. ({error})"
+            );
+        } else {
+            return Err(error.into());
+        }
+    }
+
+    // Dropped whatever happened above: with the address optional these would
+    // reject the second visitor who leaves it blank, both keying as the empty
+    // string. Only when present, which makes this a no-op from the second boot on.
+    for stale in STALE_EMAIL_INDEXES {
+        if bookings.list_index_names().await?.iter().any(|name| name == stale) {
+            bookings.drop_index(stale).await?;
+        }
     }
 
     // Serves the admin listing, newest booking first.

@@ -22,7 +22,7 @@ pub async fn create_booking(
     use crate::api::log_failure;
     use crate::db::booking::{self, BookingDoc};
     use crate::db::{DbError, datetime, session};
-    use crate::models::BookingRequest;
+    use crate::models::{BookingRequest, phone_key};
 
     let request = BookingRequest {
         session_id,
@@ -69,6 +69,7 @@ pub async fn create_booking(
         service_type: session.service_type,
         name: request.name,
         email: request.email,
+        phone_key: phone_key(&request.phone),
         phone: request.phone,
         persons: request.persons,
         comment: request.comment,
@@ -83,7 +84,7 @@ pub async fn create_booking(
     match booking::insert(&document).await {
         Ok(_) => Ok(datetime::to_label(session.date)),
         Err(DbError::Duplicate) => Err(ServerFnError::new(
-            "Une réservation existe déjà pour cette adresse sur cette séance.",
+            "Une réservation existe déjà pour ce téléphone sur cette séance.",
         )),
         Err(error) => Err(log_failure("inserting a booking", error)),
     }

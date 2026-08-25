@@ -298,11 +298,22 @@ fn ClientCell(booking: BookingView) -> impl IntoView {
     view! {
         <TableCell class="align-top">
             <div class="font-medium">{booking.name.clone()}</div>
-            <div class="text-xs">
-                <a href=format!("mailto:{}", booking.email) class="underline underline-offset-4">
-                    {booking.email.clone()}
-                </a>
-            </div>
+            // Skipped when absent: the address is optional now, and a mailto:
+            // pointing at nothing would still look like a link.
+            {(!booking.email.is_empty())
+                .then(|| {
+                    let email = booking.email.clone();
+                    view! {
+                        <div class="text-xs">
+                            <a
+                                href=format!("mailto:{email}")
+                                class="underline underline-offset-4"
+                            >
+                                {email.clone()}
+                            </a>
+                        </div>
+                    }
+                })}
             <div class="text-xs">
                 <a
                     href=format!("tel:{}", booking.phone.replace(' ', ""))

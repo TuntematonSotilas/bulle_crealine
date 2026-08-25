@@ -20,9 +20,17 @@ pub struct BookingDoc {
     /// Copied from the session so a booking stays readable on its own.
     pub service_type: ServiceType,
     pub name: String,
-    /// Lowercased; half of the unique index that rules out duplicates.
+    /// Lowercased. Optional: a visitor may leave it blank.
     pub email: String,
+    /// As the visitor typed it, which is what the admin reads and dials.
     pub phone: String,
+    /// [`crate::models::phone_key`] of the number above: the half of the unique
+    /// index that rules out booking one session twice.
+    ///
+    /// Defaulted because documents written while the address held that role carry
+    /// no such field; startup backfills them.
+    #[serde(default)]
+    pub phone_key: String,
     pub persons: u32,
     /// Note left by the visitor.
     pub comment: String,
@@ -216,6 +224,10 @@ mod tests {
 
         assert!(!booking.is_deleted, "a legacy booking must count as active");
         assert_eq!(booking.deletion_comment, "");
+        assert_eq!(
+            booking.phone_key, "",
+            "and carry no phone key until startup backfills one"
+        );
     }
 
     /// The filter has to treat "no field" as active too, or the documents above

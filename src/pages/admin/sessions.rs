@@ -544,13 +544,21 @@ fn AffectedBookings(session_id: String) -> impl IntoView {
                                 view! {
                                     <li>
                                         <span class="font-medium">{person.name.clone()}</span>
-                                        " · "
-                                        <a
-                                            href=format!("mailto:{}", person.email)
-                                            class="underline underline-offset-4"
-                                        >
-                                            {person.email.clone()}
-                                        </a>
+                                        // Skipped when absent: the address is
+                                        // optional, the phone number is not.
+                                        {(!person.email.is_empty())
+                                            .then(|| {
+                                                let email = person.email.clone();
+                                                view! {
+                                                    " · "
+                                                    <a
+                                                        href=format!("mailto:{email}")
+                                                        class="underline underline-offset-4"
+                                                    >
+                                                        {email.clone()}
+                                                    </a>
+                                                }
+                                            })}
                                         " · "
                                         <a
                                             href=format!("tel:{}", person.phone.replace(' ', ""))

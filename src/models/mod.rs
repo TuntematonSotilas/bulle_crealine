@@ -11,6 +11,7 @@ pub mod theme;
 
 pub use booking::{
     BookingContact, BookingProblem, BookingRequest, BookingView, MAX_PERSONS_PER_BOOKING,
+    phone_key,
 };
 pub use service_type::ServiceType;
 pub use session::SessionView;
