@@ -35,6 +35,12 @@ const BOOKINGS: &str = "bookings";
 /// What the sessions are about: a name and a photo.
 const THEMES: &str = "themes";
 
+/// Unique index over the live bookings of one session.
+const ACTIVE_BOOKING_INDEX: &str = "session_id_1_email_1_active";
+
+/// The name Mongo gave the unqualified index this replaced.
+const LEGACY_BOOKING_INDEX: &str = "session_id_1_email_1";
+
 static DATABASE: OnceLock<Database> = OnceLock::new();
 
 /// Anything that can go wrong while reaching Mongo.
@@ -165,14 +171,46 @@ async fn ensure_indexes(database: &Database) -> Result<(), DbError> {
 
     // Turns "this address already booked this session" into a guarantee rather
     // than a check that two simultaneous requests could both pass.
+    //
+    // Scoped to the live bookings: once a booking is deleted the address is free
+    // to book that session again. The partial filter tests `false` rather than
+    // `$ne: true` because a partialFilterExpression accepts no `$ne`, hence the
+    // backfill just above — a legacy document with no field would otherwise fall
+    // outside the index and escape the constraint entirely.
+    bookings
+        .update_many(
+            doc! { "is_deleted": { "$exists": false } },
+            doc! { "$set": { "is_deleted": false, "deletion_comment": "" } },
+        )
+        .await?;
+
     bookings
         .create_index(
             IndexModel::builder()
                 .keys(doc! { "session_id": 1, "email": 1 })
-                .options(IndexOptions::builder().unique(true).build())
+                .options(
+                    IndexOptions::builder()
+                        .name(ACTIVE_BOOKING_INDEX.to_owned())
+                        .unique(true)
+                        .partial_filter_expression(doc! { "is_deleted": false })
+                        .build(),
+                )
                 .build(),
         )
         .await?;
+
+    // The unqualified index this replaces would still refuse a second booking
+    // after the first was deleted. Dropped only once the partial one is in place,
+    // so the uniqueness guarantee is never lifted, and only when actually there,
+    // which makes this a no-op from the second boot on.
+    if bookings
+        .list_index_names()
+        .await?
+        .iter()
+        .any(|name| name == LEGACY_BOOKING_INDEX)
+    {
+        bookings.drop_index(LEGACY_BOOKING_INDEX).await?;
+    }
 
     // Serves the admin listing, newest booking first.
     bookings

@@ -126,6 +126,11 @@ pub struct BookingView {
     pub admin_comment: String,
     /// When the booking came in, already formatted.
     pub created_label: String,
+    /// Whether the admin removed this booking; decides which of the two admin
+    /// tables it lands in.
+    pub is_deleted: bool,
+    /// Why the admin removed it. Empty unless [`Self::is_deleted`].
+    pub deletion_comment: String,
 }
 
 /// Who to warn before a session is changed or dropped.

@@ -74,6 +74,8 @@ pub async fn create_booking(
         comment: request.comment,
         admin_comment: String::new(),
         created_at: DateTime::now(),
+        is_deleted: false,
+        deletion_comment: String::new(),
     };
 
     // The duplicate is caught by the unique index rather than by a prior read, so
@@ -149,6 +151,8 @@ pub async fn all_bookings() -> Result<Vec<BookingView>, ServerFnError> {
                 comment: booking.comment,
                 admin_comment: booking.admin_comment,
                 created_label: datetime::to_short_label(booking.created_at),
+                is_deleted: booking.is_deleted,
+                deletion_comment: booking.deletion_comment,
             }
         })
         .collect())
@@ -169,6 +173,38 @@ pub async fn save_admin_comment(id: String, comment: String) -> Result<(), Serve
     booking::set_admin_comment(booking_id, comment.trim())
         .await
         .map_err(|error| log_failure("saving an admin comment", error))?;
+
+    Ok(())
+}
+
+/// Marks a booking as deleted, recording why.
+///
+/// The reason is mandatory, and checked here rather than trusted from the form:
+/// a `required` textarea still posts spaces, and the request can arrive without
+/// going through the page at all.
+#[server]
+pub async fn delete_booking(id: String, reason: String) -> Result<(), ServerFnError> {
+    use crate::api::log_failure;
+    use crate::auth::require_admin;
+    use crate::db::{booking, session};
+
+    require_admin()?;
+
+    let reason = reason.trim();
+    if reason.is_empty() {
+        return Err(ServerFnError::new("Indiquez un motif de suppression."));
+    }
+
+    let booking_id =
+        session::parse_id(&id).map_err(|_| ServerFnError::new("Réservation inconnue."))?;
+
+    let deleted = booking::soft_delete(booking_id, reason)
+        .await
+        .map_err(|error| log_failure("deleting a booking", error))?;
+
+    if !deleted {
+        return Err(ServerFnError::new("Réservation inconnue."));
+    }
 
     Ok(())
 }
