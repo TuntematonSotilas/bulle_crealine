@@ -115,8 +115,8 @@ fn DesktopNav() -> impl IntoView {
                                         </a>
                                     </li>
                                     <li class="p-1">
-                                        <a href="/moi-et-mon-atelier/formations" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                                            <div class="text-sm font-medium leading-none">"Formations"</div>
+                                        <a href="/moi-et-mon-atelier/diplomes-et-formations" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                            <div class="text-sm font-medium leading-none">"Diplômes et formations"</div>
                                         </a>
                                     </li>
                                 </ul>
@@ -272,7 +272,7 @@ fn MobileNav() -> impl IntoView {
                                 </a>
                             </li>
                             <li>
-                                <a href="/moi-et-mon-atelier/formations" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                <a href="/moi-et-mon-atelier/diplomes-et-formations" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
                                     "Formations"
                                 </a>
                             </li>
