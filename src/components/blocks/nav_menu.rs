@@ -213,7 +213,7 @@ fn MobileNav() -> impl IntoView {
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="/services/parents-enfants-6-a-12" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                        <a href="/services/parents-enfants-six-a-douze" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
                                             "6 à 12 ans"
                                         </a>
                                     </li>
