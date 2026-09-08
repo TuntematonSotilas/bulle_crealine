@@ -175,6 +175,13 @@ async fn ensure_indexes(database: &Database) -> Result<(), DbError> {
         )
         .await?;
 
+    // Serves the home page, which asks for the upcoming sessions of every kind at
+    // once and groups them itself. The compound index above cannot answer that:
+    // `service_type` is its prefix, so a filter on `date` alone does not reach it.
+    sessions
+        .create_index(IndexModel::builder().keys(doc! { "date": 1 }).build())
+        .await?;
+
     // Brings the documents written before soft deletion existed in line with the
     // field, so the partial filter below covers every booking. It has to test
     // `false` rather than `$ne: true`, because a partialFilterExpression accepts

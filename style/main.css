@@ -1,5 +1,9 @@
 /* my styles*/
-@import url("https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&display=swap");
+/* Both faces in one request rather than two: Comfortaa for body copy, Parisienne
+   for headings (see --font-display). `display=swap` so a heading shows in the
+   fallback for a frame rather than not at all -- the hero title is the first
+   thing on the page. */
+@import url("https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&family=Parisienne&display=swap");
 @import "/assets/home.css";
 
 .no-tooltips {

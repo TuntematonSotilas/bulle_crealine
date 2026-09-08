@@ -7,7 +7,7 @@ use crate::models::ServiceType;
 pub fn AteliersParentsEnfantsSixADouze() -> impl IntoView {
 
     let title = "Ateliers parents-enfants (6 à 12 ans)";
-    let desc = "Nos ateliers parents-enfants offrent un espace de création commune, favorisant un temps de partage loin des impératifs quotidiens.";
+    let desc = ServiceType::ParentsEnfantsSixADouze.description();
     
     let schedule = "Chaque premier mercredi du mois, de 10h à 12h";
     let place = "Bulle Créaline, 5 Rue Marc Seguin, 42110 Feurs";

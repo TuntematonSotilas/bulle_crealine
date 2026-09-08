@@ -7,7 +7,7 @@ use crate::models::ServiceType;
 pub fn ApresMidisCreatifs() -> impl IntoView {
 
     let title = "Après-midis créatifs (adultes)";
-    let desc = "Découvrez nos ateliers créatifs conçus pour tous les âges et tous les niveaux.";
+    let desc = ServiceType::ApresMidisCreatifs.description();
     let schedule = "Tous les dimanches, de 14h à 17h";
     let place = "Bulle Créaline, 5 Rue Marc Seguin, 42110 Feurs";
     let age = "À partir de 13 ans";

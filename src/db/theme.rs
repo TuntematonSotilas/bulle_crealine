@@ -47,17 +47,24 @@ pub struct ThemeSummaryDoc {
 }
 
 impl ThemeSummaryDoc {
+    /// Where [`crate::media::theme_photo`] serves this theme's image.
+    ///
+    /// The stamp lets the response be cached forever while a replaced photo still
+    /// shows up immediately, under its new URL. Its own method because a session
+    /// view carries this URL too, and the two must agree.
+    pub fn photo_url(&self) -> String {
+        format!(
+            "/media/theme/{}?v={}",
+            self.id.to_hex(),
+            self.photo_updated_at.timestamp_millis()
+        )
+    }
+
     pub fn to_view(&self) -> ThemeView {
         ThemeView {
             id: self.id.to_hex(),
             name: self.name.clone(),
-            // The stamp lets the response be cached forever while a replaced photo
-            // still shows up immediately, under its new URL.
-            photo_url: format!(
-                "/media/theme/{}?v={}",
-                self.id.to_hex(),
-                self.photo_updated_at.timestamp_millis()
-            ),
+            photo_url: self.photo_url(),
         }
     }
 }

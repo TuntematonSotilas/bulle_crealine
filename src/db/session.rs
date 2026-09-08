@@ -5,6 +5,7 @@ use bson::{DateTime, doc};
 use futures_util::TryStreamExt;
 use serde::{Deserialize, Serialize};
 
+use crate::db::theme::ThemeSummaryDoc;
 use crate::db::{DbError, datetime, sessions};
 use crate::models::{ServiceType, SessionView};
 
@@ -25,20 +26,23 @@ pub struct SessionDoc {
 
 impl SessionDoc {
     /// Turns the document into what the browser gets, given how many people are
-    /// already booked on it and the name of the theme it points at.
+    /// already booked on it and the theme it points at.
     ///
-    /// `theme_name` is passed in rather than looked up here so that listing sessions
-    /// resolves every theme in one round trip. It falls back to a marker when the
-    /// theme is missing: deleting a referenced theme is refused, so that only happens
-    /// if the collection was edited by hand.
-    pub fn to_view(&self, booked_persons: u32, theme_name: Option<&str>) -> SessionView {
+    /// `theme` is passed in rather than looked up here so that listing sessions
+    /// resolves every theme in one round trip. It falls back to a marker and no
+    /// photo when the theme is missing: deleting a referenced theme is refused, so
+    /// that only happens if the collection was edited by hand.
+    pub fn to_view(&self, booked_persons: u32, theme: Option<&ThemeSummaryDoc>) -> SessionView {
         SessionView {
             id: self.id.map(|id| id.to_hex()).unwrap_or_default(),
             service_type: self.service_type,
             date_label: datetime::to_label(self.date),
             date_input: datetime::to_input(self.date),
             theme_id: self.theme_id.to_hex(),
-            theme_name: theme_name.unwrap_or("Thème supprimé").to_owned(),
+            theme_name: theme
+                .map(|found| found.name.clone())
+                .unwrap_or_else(|| "Thème supprimé".to_owned()),
+            photo_url: theme.map(ThemeSummaryDoc::photo_url).unwrap_or_default(),
             price: self.price,
             max_persons: self.max_persons,
             booked_persons,
@@ -61,6 +65,24 @@ pub async fn list_upcoming(service_type: ServiceType) -> Result<Vec<SessionDoc>,
     let found = sessions()?
         .find(filter)
         .sort(doc! { "date": 1 })
+        .await?
+        .try_collect()
+        .await?;
+
+    Ok(found)
+}
+
+/// The next `limit` upcoming sessions, whatever their kind, soonest first.
+///
+/// One query across all four kinds rather than four, and capped in the database
+/// rather than in Rust: the `date` index that `crate::db::ensure_indexes` creates
+/// at startup already holds them in this order, so Mongo walks it and stops at
+/// `limit` instead of reading a calendar that only grows.
+pub async fn list_next_upcoming(limit: i64) -> Result<Vec<SessionDoc>, DbError> {
+    let found = sessions()?
+        .find(doc! { "date": { "$gte": DateTime::now() } })
+        .sort(doc! { "date": 1 })
+        .limit(limit)
         .await?
         .try_collect()
         .await?;

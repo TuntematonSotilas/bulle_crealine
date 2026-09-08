@@ -45,6 +45,26 @@ impl ServiceType {
         }
     }
 
+    /// One or two sentences introducing this kind of workshop.
+    ///
+    /// Lives here rather than on the page that shows it so the home page's session
+    /// cards and the service page itself cannot drift apart.
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::ParentsEnfantsMoinsSix | Self::ParentsEnfantsSixADouze => {
+                "Nos ateliers parents-enfants offrent un espace de création commune, \
+                 favorisant un temps de partage loin des impératifs quotidiens."
+            }
+            Self::AperosCreatifs => {
+                "Une soirée entre adultes autour d'un verre et d'un projet créatif, \
+                 sans prérequis : on vient souffler et on repart avec sa création."
+            }
+            Self::ApresMidisCreatifs => {
+                "Découvrez nos ateliers créatifs conçus pour tous les âges et tous les niveaux."
+            }
+        }
+    }
+
     /// Path of the public page describing this kind of workshop.
     pub const fn page_path(self) -> &'static str {
         match self {
@@ -95,6 +115,21 @@ mod tests {
         for kind in ServiceType::ALL {
             let serialized = serde_json::to_string(&kind).expect("a unit variant serializes");
             assert_eq!(serialized, format!("\"{}\"", kind.slug()));
+        }
+    }
+
+    /// The home page prints this next to every session, so an empty one would
+    /// leave a blank gap on a card rather than fail anywhere visible.
+    #[test]
+    fn every_kind_is_described() {
+        for kind in ServiceType::ALL {
+            let description = kind.description();
+
+            assert!(!description.trim().is_empty(), "{kind:?} has no description");
+            assert!(
+                !description.contains("  "),
+                "{kind:?} kept the indentation of its continued string literal: {description}"
+            );
         }
     }
 

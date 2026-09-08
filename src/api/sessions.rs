@@ -24,6 +24,25 @@ pub async fn upcoming_sessions(service: String) -> Result<Vec<SessionView>, Serv
     with_booked_persons(sessions).await
 }
 
+/// The next few sessions on offer, every kind of workshop mixed together and
+/// soonest first, for the home page.
+///
+/// Open to everyone, like [`upcoming_sessions`].
+#[server]
+pub async fn next_sessions() -> Result<Vec<SessionView>, ServerFnError> {
+    use crate::api::log_failure;
+    use crate::db::session;
+    use crate::models::HOME_SESSIONS;
+
+    let upcoming = session::list_next_upcoming(HOME_SESSIONS as i64)
+        .await
+        .map_err(|error| log_failure("listing the next upcoming sessions", error))?;
+
+    // Soonest first out of the query, and `with_booked_persons` keeps that order,
+    // so the page can render the list as it comes.
+    with_booked_persons(upcoming).await
+}
+
 /// Every session, for the admin listing.
 #[server]
 pub async fn all_sessions() -> Result<Vec<SessionView>, ServerFnError> {
@@ -185,11 +204,13 @@ async fn with_booked_persons(
     theme_ids.sort_unstable();
     theme_ids.dedup();
 
-    let names: HashMap<_, _> = theme::find_many(theme_ids)
+    // Kept whole rather than reduced to names: a session view carries the theme's
+    // photo URL as well, and that is built from the stamp on the document.
+    let themes: HashMap<_, _> = theme::find_many(theme_ids)
         .await
         .map_err(|error| log_failure("resolving the themes of a list of sessions", error))?
         .into_iter()
-        .map(|found| (found.id, found.name))
+        .map(|found| (found.id, found))
         .collect();
 
     Ok(sessions
@@ -200,7 +221,7 @@ async fn with_booked_persons(
                 .and_then(|id| booked.get(&id).copied())
                 .unwrap_or(0);
 
-            session.to_view(taken, names.get(&session.theme_id).map(String::as_str))
+            session.to_view(taken, themes.get(&session.theme_id))
         })
         .collect())
 }

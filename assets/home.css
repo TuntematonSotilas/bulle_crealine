@@ -3,14 +3,25 @@
   display: grid;
   gap: 1rem;
   justify-items: center;
-  padding: 4rem 1.5rem;
+  padding: 2.75rem 1.5rem;
   text-align: center;
   overflow: hidden;
 }
 
 .home-hero-title {
-  font-size: 2.5rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  /* Parisienne, with the stack from --font-display so a heading still reads
+     while the face is loading. */
+  font-family: var(--font-display);
+  /* Larger in em than the 2.5rem it replaces, yet shorter on the page: a script
+     spends much of its em box on ascenders and descenders, so the same nominal
+     size reads noticeably smaller than Comfortaa did. The tight line-height is
+     what brings the block in under its old height -- it used to inherit 1.5. */
+  font-size: 2.75rem;
+  line-height: 1.1;
+  /* Parisienne ships a single weight: asking for 600 would only get a
+     synthesised bold, which smears its thin strokes. */
+  font-weight: 400;
+  /* Must stay 0: the letters join up, and any tracking breaks the joins. */
+  letter-spacing: 0;
   color: var(--heading);
 }

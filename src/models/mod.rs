@@ -14,5 +14,5 @@ pub use booking::{
     phone_key,
 };
 pub use service_type::ServiceType;
-pub use session::SessionView;
+pub use session::{HOME_SESSIONS, SessionView};
 pub use theme::{AffectedSession, MAX_PHOTO_BYTES, MAX_PHOTO_LABEL, ThemeView};

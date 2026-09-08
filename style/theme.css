@@ -110,6 +110,8 @@
 
 @theme {
   --font-sans: 'Comfortaa', 'sans-serif';
+  /* Display face, for headings only: a script, so body copy stays on --font-sans. */
+  --font-display: 'Parisienne', 'Comfortaa', 'cursive';
 }
 
 @theme inline {

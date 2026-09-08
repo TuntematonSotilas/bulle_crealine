@@ -337,6 +337,7 @@ mod tests {
             date_input: "2026-07-05T14:00".to_owned(),
             theme_id: "651d1f0a0000000000000002".to_owned(),
             theme_name: "Aquarelle".to_owned(),
+            photo_url: "/media/theme/651d1f0a0000000000000002?v=1".to_owned(),
             price: 65.0,
             max_persons: 8,
             booked_persons: 2,

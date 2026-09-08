@@ -2,6 +2,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::ServiceType;
 
+/// How many upcoming sessions the home page lists, every kind of workshop mixed
+/// together and soonest first.
+///
+/// The home page is a shop window, not the calendar: past the next handful of
+/// dates a visitor is better served by a workshop's own page, which the "voir +"
+/// link on each card points at. The cap is global rather than per kind, so a
+/// heavily scheduled workshop can take the whole list -- which is the point, those
+/// really are the next dates on offer.
+pub const HOME_SESSIONS: usize = 6;
+
 /// A session as the browser sees it.
 ///
 /// Dates arrive already formatted, so the WASM bundle needs neither a date nor a
@@ -20,6 +30,10 @@ pub struct SessionView {
     pub theme_id: String,
     /// Name of that theme, resolved server-side so no page has to join anything.
     pub theme_name: String,
+    /// Where to fetch the theme's photo, stamp included, or empty when the theme
+    /// is gone. Resolved here rather than rebuilt from `theme_id` by the page,
+    /// which has no way to know the stamp.
+    pub photo_url: String,
     pub price: f64,
     /// How many people the session can take in total.
     pub max_persons: u32,
@@ -70,6 +84,7 @@ mod tests {
             date_input: "2026-07-05T14:00".to_owned(),
             theme_id: "651d1f0a0000000000000001".to_owned(),
             theme_name: "Sculpture".to_owned(),
+            photo_url: "/media/theme/651d1f0a0000000000000001?v=1".to_owned(),
             price: 65.0,
             max_persons,
             booked_persons,
