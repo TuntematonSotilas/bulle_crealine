@@ -12,6 +12,31 @@ pub fn NavMenu() -> impl IntoView {
     }
 }
 
+/// Small wave set between the mobile menu's top-level sections.
+///
+/// Kept at icon size and centred rather than stretched across the panel, so the
+/// shape holds its own proportions and the stroke needs no correction.
+#[component]
+fn SectionWave() -> impl IntoView {
+    view! {
+        // `block` because `mx-auto` has nothing to centre on an inline box, which
+        // is what an `svg` is by default. The path is inset a unit either side:
+        // `stroke-linecap: round` puts half the stroke past each end point, and
+        // the viewBox would clip it.
+        <svg
+            aria-hidden="true"
+            viewBox="0 0 26 8"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            class="block mx-auto w-10 h-3 text-heading-soft"
+        >
+            <path d="M1 4 q 3 -3 6 0 t 6 0 t 6 0 t 6 0"/>
+        </svg>
+    }
+}
+
 /// The hover-driven bar, from `md` up.
 #[component]
 fn DesktopNav() -> impl IntoView {
@@ -20,8 +45,25 @@ fn DesktopNav() -> impl IntoView {
             <NavigationMenu>
                 <NavigationMenuList>
                     <NavigationMenuItem>
-                        <NavigationMenuLink href="/" class="flex justify-center items-center px-2 h-16 rounded-md transition-colors hover:bg-accent">
-                                <img src="/assets/icon.svg" alt="Logo" class="w-16 h-16"/>
+                        // The group is named: `NavigationMenuList` already carries a
+                        // plain `group`, and an unnamed `group-hover:` below would
+                        // fire from a hover anywhere in the bar.
+                        <NavigationMenuLink
+                            href="/"
+                            class="group/logo relative flex justify-center items-center px-2 h-16 rounded-md transition-colors hover:bg-accent"
+                        >
+                            // "Accueil" rather than "Logo": the alt text is what
+                            // names this link, and the label the hover reveals.
+                            <img src="/assets/icon.svg" alt="Accueil" class="w-16 h-16"/>
+                            // Hidden from assistive tech, which already reads the
+                            // link's name, and shown on keyboard focus as well as
+                            // hover so it is not mouse-only.
+                            <span
+                                aria-hidden="true"
+                                class="absolute top-full left-1/2 z-20 px-2 py-1 -translate-x-1/2 text-xs font-medium whitespace-nowrap rounded-md border shadow-md transition-opacity opacity-0 pointer-events-none border-border bg-popover text-popover-foreground group-hover/logo:opacity-100 group-focus-visible/logo:opacity-100"
+                            >
+                                "Accueil"
+                            </span>
                         </NavigationMenuLink>
                     </NavigationMenuItem>
 
@@ -232,6 +274,13 @@ fn MobileNav() -> impl IntoView {
                         </ul>
                     </li>
 
+                    // Carried by an `<li>` because a `<ul>` takes no other child,
+                    // and hidden from assistive tech: it divides the sections
+                    // visually, and the headings already do so structurally.
+                    <li aria-hidden="true" class="py-2">
+                        <SectionWave/>
+                    </li>
+
                     <li>
                         <div class="px-3 py-2 text-lg font-semibold">"Autres Ateliers"</div>
                         <ul class="ml-4 mt-2 space-y-1">
@@ -251,6 +300,10 @@ fn MobileNav() -> impl IntoView {
                                 </a>
                             </li>
                         </ul>
+                    </li>
+
+                    <li aria-hidden="true" class="py-2">
+                        <SectionWave/>
                     </li>
 
                     <li>
@@ -320,6 +373,119 @@ mod tests {
         assert!(
             !class.split_whitespace().any(|name| name == "inline-flex"),
             "inline-flex would reintroduce baseline alignment: {class}"
+        );
+    }
+
+    /// Everything the logo link renders, bounded by its closing tag so an
+    /// assertion cannot pass on markup belonging to a later link.
+    fn logo_link() -> String {
+        let html = Owner::new().with(|| {
+            // The theme toggle sits in this bar and reads the context `App` provides.
+            provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
+            view! { <DesktopNav/> }.to_html()
+        });
+
+        html.split("<a ")
+            .find(|fragment| fragment.contains("/assets/icon.svg"))
+            .and_then(|fragment| fragment.split_once("</a>").map(|(inside, _)| inside.to_owned()))
+            .expect("the logo link should render")
+    }
+
+    /// The label has to be scoped to the logo: `NavigationMenuList` carries a
+    /// plain `group`, so an unnamed `group-hover:` would reveal it from a hover
+    /// anywhere in the bar.
+    #[test]
+    fn the_home_label_answers_to_the_logo_alone() {
+        let logo = logo_link();
+
+        assert!(logo.contains("group/logo"), "the group should be named: {logo}");
+        assert!(
+            logo.contains("group-hover/logo:opacity-100"),
+            "and the label should key off that name: {logo}"
+        );
+        assert!(
+            !logo.contains("group-hover:opacity-100"),
+            "an unnamed group-hover would fire from the whole bar: {logo}"
+        );
+    }
+
+    /// Hidden until hovered, reachable without a mouse, and silent to assistive
+    /// tech, which already reads the link's own name.
+    #[test]
+    fn the_home_label_starts_hidden_and_answers_to_the_keyboard() {
+        let logo = logo_link();
+
+        assert!(logo.contains("Accueil"), "the label should render: {logo}");
+        assert!(logo.contains("opacity-0"), "and start hidden: {logo}");
+        assert!(
+            logo.contains("group-focus-visible/logo:opacity-100"),
+            "a hover-only label would be unreachable by keyboard: {logo}"
+        );
+        assert!(
+            logo.contains("aria-hidden"),
+            "the label duplicates the link name, so it should not be announced: {logo}"
+        );
+    }
+
+    /// The link points at the home page, so its accessible name has to say so;
+    /// "Logo" described the image rather than the destination.
+    #[test]
+    fn the_logo_image_names_its_destination() {
+        let logo = logo_link();
+
+        assert!(logo.contains(r#"alt="Accueil""#), "{logo}");
+    }
+
+    fn mobile_nav() -> String {
+        Owner::new().with(|| {
+            // The theme toggle sits in this bar and reads the context `App` provides.
+            provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
+            view! { <MobileNav/> }.to_html()
+        })
+    }
+
+    /// A rule goes between the sections, not after each one, so their counts stay
+    /// one apart however many sections the menu grows to.
+    #[test]
+    fn a_wave_sits_between_the_mobile_sections_and_not_after_the_last() {
+        let html = mobile_nav();
+
+        let sections = html.matches("text-lg font-semibold").count();
+        let waves = html.matches("text-heading-soft").count();
+
+        assert!(sections >= 2, "the menu should have sections to divide: {sections}");
+        assert_eq!(
+            waves,
+            sections - 1,
+            "{sections} sections want {} rules, found {waves}",
+            sections - 1
+        );
+    }
+
+    /// An icon-sized mark has to be centred, and an `svg` is inline by default,
+    /// which leaves `mx-auto` nothing to work with.
+    #[test]
+    fn the_wave_is_centred_as_a_block() {
+        let html = mobile_nav();
+
+        let class = html
+            .split("<svg")
+            .find(|fragment| fragment.contains("text-heading-soft"))
+            .and_then(|fragment| fragment.split_once("class=\""))
+            .and_then(|(_, rest)| rest.split_once('"'))
+            .map(|(class, _)| class)
+            .expect("the wave should render with classes");
+
+        let names: Vec<&str> = class.split_whitespace().collect();
+
+        assert!(names.contains(&"mx-auto"), "it should be centred: {class}");
+        assert!(
+            names.contains(&"block"),
+            "mx-auto does nothing on an inline box: {class}"
+        );
+        assert!(
+            !names.contains(&"w-full"),
+            "it is an icon between the sections, not a rule across them: {class}"
         );
     }
 }
