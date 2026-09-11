@@ -1,4 +1,4 @@
-use icons::{ArrowRight, CalendarDays, ImageOff, Palette, Users};
+use icons::{ArrowRight, ImageOff, Users};
 use leptos::either::Either;
 use leptos::prelude::*;
 
@@ -65,42 +65,44 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
     view! {
         <article class="flex overflow-hidden flex-col rounded-[2rem] border transition-shadow group border-border bg-card text-card-foreground shadow-(--shadow) hover:shadow-lg">
 
+            // Date first, as the card's title: the home page mixes every kind of
+            // workshop into one date-ordered grid, so when a session runs is what
+            // a visitor scans for. It carries no icon for the same reason -- a
+            // heading beside a glyph reads as a list item rather than a title.
+            <header class="flex flex-col gap-1.5 items-start px-4 pt-4 pb-3">
+                <p class="text-base font-semibold leading-snug text-heading">{date_label}</p>
+                // Full-strength text rather than the muted grey: this line is part
+                // of the offer, not a caption. It stays neutral so the date above
+                // keeps the accent colour to itself.
+                <p class="text-base font-medium text-card-foreground">{theme_name}</p>
+                // The chip is the only thing naming which workshop this date
+                // belongs to, the grid being one flat list. Its text sits on the
+                // pale surface rather than in the accent colour, which at this
+                // size would not clear the contrast floor.
+                <span class="px-2.5 py-0.5 text-xs font-medium rounded-full bg-surface text-surface-foreground">
+                    {service.label()}
+                </span>
+            </header>
+
             // 16/9 rather than the 4/3 a photo usually gets: the picture is here
             // to set a mood, and a quarter less height lets more dates sit above
             // the fold.
             <div class="overflow-hidden relative aspect-16/9">
                 {photo}
-                // The kind of workshop as a badge over the photo. Not decoration:
-                // the home page mixes every kind into one date-ordered grid, so
-                // this is the only thing telling a visitor which workshop a date
-                // belongs to.
-                <span class="absolute top-2 left-2 px-2.5 py-0.5 text-xs font-medium rounded-full shadow-sm backdrop-blur bg-card/90 text-heading">
-                    {service.label()}
-                </span>
             </div>
 
-            <div class="flex flex-col flex-1 gap-2.5 p-4">
+            <footer class="flex flex-col flex-1 gap-2.5 p-4">
                 <p class="text-sm leading-relaxed text-muted-foreground">
                     {service.description()}
                 </p>
 
-                <div class="grid gap-1.5 text-sm">
-                    <div class="flex gap-2 items-start">
-                        <CalendarDays class="mt-0.5 w-3.5 h-3.5 shrink-0 text-heading-soft"/>
-                        <span class="font-medium">{date_label}</span>
-                    </div>
-                    <div class="flex gap-2 items-start">
-                        <Palette class="mt-0.5 w-3.5 h-3.5 shrink-0 text-heading-soft"/>
-                        <span>"Thème : "{theme_name}</span>
-                    </div>
-                    <div class="flex gap-2 items-start">
-                        <Users class="mt-0.5 w-3.5 h-3.5 shrink-0 text-heading-soft"/>
-                        <span class=if full {
-                            "font-medium text-destructive"
-                        } else {
-                            "text-muted-foreground"
-                        }>{availability}</span>
-                    </div>
+                <div class="flex gap-2 items-start text-sm">
+                    <Users class="mt-0.5 w-3.5 h-3.5 shrink-0 text-heading-soft"/>
+                    <span class=if full {
+                        "font-medium text-destructive"
+                    } else {
+                        "text-muted-foreground"
+                    }>{availability}</span>
                 </div>
 
                 <div class="flex gap-3 justify-between items-center pt-1 mt-auto">
@@ -113,7 +115,7 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
                         <ArrowRight class="w-4 h-4"/>
                     </a>
                 </div>
-            </div>
+            </footer>
         </article>
     }
 }
@@ -178,6 +180,46 @@ mod tests {
             html.contains(ServiceType::AperosCreatifs.page_path()),
             "\"voir +\" points nowhere: {html}"
         );
+    }
+
+    /// The card reads top to bottom: when it is, what it is about and which
+    /// workshop it belongs to, then the photo, then what it involves, what is left
+    /// and the way in.
+    #[test]
+    fn the_card_is_laid_out_header_photo_then_footer() {
+        let html = card_html(session(5));
+
+        let at = |needle: &str| {
+            html.find(needle)
+                .unwrap_or_else(|| panic!("{needle:?} is missing: {html}"))
+        };
+
+        // The photo's alt text names the theme too, so the first hit is the
+        // header's line, which is the one that has to come before the image.
+        let order = [
+            at("dimanche 5 juillet 2026 à 14h00"),
+            at("Aquarelle"),
+            at(ServiceType::AperosCreatifs.label()),
+            at("/media/theme/"),
+            at(ServiceType::AperosCreatifs.description()),
+            at("3 places restantes"),
+            at("/booking/aperos-creatifs"),
+        ];
+
+        assert!(
+            order.windows(2).all(|pair| pair[0] < pair[1]),
+            "the card is out of order: {order:?}"
+        );
+    }
+
+    /// A `<header>` and a `<footer>` around the photo, rather than one flat run of
+    /// divs, so the grouping the layout implies is in the markup too.
+    #[test]
+    fn the_card_groups_its_three_parts() {
+        let html = card_html(session(5));
+
+        assert_eq!(html.matches("<header").count(), 1, "no single header: {html}");
+        assert_eq!(html.matches("<footer").count(), 1, "no single footer: {html}");
     }
 
     /// Offering to book a session that cannot take anyone would send the visitor
