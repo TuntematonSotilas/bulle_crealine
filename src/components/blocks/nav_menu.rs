@@ -117,17 +117,17 @@ fn DesktopNav() -> impl IntoView {
                             <div class="w-[320px] p-0">
                                 <ul class="space-y-2">
                                     <li class="p-1">
-                                        <a href="/services/en-institution" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                        <a href="/pro/en-institution" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
                                             <div class="text-sm font-medium leading-none">"Ateliers en institution"</div>
                                         </a>
                                     </li>
                                     <li class="p-1">
-                                        <a href="/services/hors-les-murs" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                        <a href="/pro/hors-les-murs" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
                                             <div class="text-sm font-medium leading-none">"Ateliers hors les murs"</div>
                                         </a>
                                     </li>
                                     <li class="p-1">
-                                        <a href="/services/individuels" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                        <a href="/pro/individuels" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
                                             <div class="text-sm font-medium leading-none">"Ateliers individuels"</div>
                                         </a>
                                     </li>
@@ -154,6 +154,11 @@ fn DesktopNav() -> impl IntoView {
                                     <li class="p-1">
                                         <a href="/moi-et-mon-atelier/photos" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
                                             <div class="text-sm font-medium leading-none">"Photos des ateliers"</div>
+                                        </a>
+                                    </li>
+                                    <li class="p-1">
+                                        <a href="/moi-et-mon-atelier/catalogue" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
+                                            <div class="text-sm font-medium leading-none">"Catalogue des ateliers"</div>
                                         </a>
                                     </li>
                                     <li class="p-1">
@@ -325,8 +330,13 @@ fn MobileNav() -> impl IntoView {
                                 </a>
                             </li>
                             <li>
+                                <a href="/moi-et-mon-atelier/catalogue" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
+                                    "Catalogue des ateliers"
+                                </a>
+                            </li>
+                            <li>
                                 <a href="/moi-et-mon-atelier/diplomes-et-formations" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
-                                    "Formations"
+                                    "Diplômes et formations"
                                 </a>
                             </li>
                         </ul>
@@ -442,6 +452,48 @@ mod tests {
             provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
             view! { <MobileNav/> }.to_html()
         })
+    }
+
+    fn desktop_nav() -> String {
+        Owner::new().with(|| {
+            provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
+            view! { <DesktopNav/> }.to_html()
+        })
+    }
+
+    /// A page reachable from one menu only is invisible to half the visitors, so
+    /// every entry under "Moi et mon atelier" has to sit in both.
+    #[test]
+    fn both_menus_reach_the_pages_of_the_workshop_section() {
+        let bar = desktop_nav();
+        let panel = mobile_nav();
+
+        for slug in ["qui-suis-je", "catalogue", "diplomes-et-formations"] {
+            let href = format!("href=\"/moi-et-mon-atelier/{slug}\"");
+
+            assert!(bar.contains(&href), "the bar is missing {href}: {bar}");
+            assert!(panel.contains(&href), "the panel is missing {href}: {panel}");
+        }
+    }
+
+    /// The two menus had drifted apart on these three: the bar pointed at
+    /// `/services/`, the panel at `/pro/`. Whichever menu a visitor opens has to
+    /// land them on the same page.
+    #[test]
+    fn both_menus_send_the_professional_workshops_to_the_same_place() {
+        let bar = desktop_nav();
+        let panel = mobile_nav();
+
+        for kind in crate::models::ServiceProType::ALL {
+            let href = format!("href=\"{}\"", kind.page_path());
+
+            assert!(bar.contains(&href), "the bar is missing {href}: {bar}");
+            assert!(panel.contains(&href), "the panel is missing {href}: {panel}");
+
+            let stale = format!("/services/{}", kind.slug());
+            assert!(!bar.contains(&stale), "the bar still uses {stale}: {bar}");
+            assert!(!panel.contains(&stale), "the panel still uses {stale}: {panel}");
+        }
     }
 
     /// A rule goes between the sections, not after each one, so their counts stay

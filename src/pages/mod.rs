@@ -22,5 +22,6 @@ pub use services::{
     parents_enfants_six_a_douze::AteliersParentsEnfantsSixADouze,
 };
 pub use moi_et_mon_atelier::{
-    diplomes_et_formations::DiplomesEtFormationsPage, qui_suis_je::QuiSuisJePage,
+    catalogue::CataloguePage, diplomes_et_formations::DiplomesEtFormationsPage,
+    qui_suis_je::QuiSuisJePage,
 };
