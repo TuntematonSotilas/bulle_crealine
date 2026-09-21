@@ -39,11 +39,13 @@ pub fn App() -> impl IntoView {
             <main class="container mx-auto px-4 py-4 min-h-[72vh] bubbles">
                 <Routes fallback=move || "Not found.">
                     <Route path=StaticSegment("") view=HomePage/>
-                    <Route path=path!("/services/parents-enfants-moins-six") view=AteliersParentsEnfantsMoinsSix/>
-                    <Route path=path!("/services/parents-enfants-six-a-douze") view=AteliersParentsEnfantsSixADouze/>
-                    <Route path=path!("/services/apres-midis-creatifs") view=ApresMidisCreatifs/>
-                    <Route path=path!("/services/aperos-creatifs") view=AperosCreatifs/>
-                    
+
+                    // One route per section, one component behind both: workshops
+                    // are rows the admin edits, so which ones exist is not known at
+                    // compile time. The prefix says whether a workshop can be booked.
+                    <Route path=path!("/services/:slug") view=ServicePage/>
+                    <Route path=path!("/pro/:slug") view=ServicePage/>
+
                     <Route path=path!("/moi-et-mon-atelier/qui-suis-je") view=QuiSuisJePage/>
                     <Route path=path!("/moi-et-mon-atelier/diplomes-et-formations") view=DiplomesEtFormationsPage/>
                     <Route path=path!("/moi-et-mon-atelier/catalogue") view=CataloguePage/>
@@ -54,6 +56,7 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/booking/:service") view=BookingPage/>
                     <Route path=path!("/admin") view=AdminPage/>
                     <Route path=path!("/admin/login") view=AdminLoginPage/>
+                    <Route path=path!("/admin/services") view=AdminServicesPage/>
                     <Route path=path!("/admin/sessions") view=AdminSessionsPage/>
                     <Route path=path!("/admin/themes") view=AdminThemesPage/>
                     <Route path=path!("/admin/bookings") view=AdminBookingsPage/>

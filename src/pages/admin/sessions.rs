@@ -5,6 +5,7 @@ use leptos_meta::Title;
 use crate::api::sessions::{
     DeleteSession, SaveSession, all_sessions, session_contacts,
 };
+use crate::api::services::all_services;
 use crate::api::themes::all_themes;
 use crate::auth::user_message;
 use crate::components::ui::alert::{Alert, AlertDescription, AlertTitle, AlertVariant};
@@ -17,7 +18,7 @@ use crate::components::ui::select::{
     Select, SelectContent, SelectGroup, SelectOption, SelectTrigger, SelectValue,
 };
 use crate::components::ui::table::*;
-use crate::models::{ServiceType, SessionView};
+use crate::models::SessionView;
 use crate::pages::admin::AdminShell;
 
 /// What the admin is doing to the session list right now.
@@ -176,7 +177,7 @@ fn SessionTable(rows: Vec<SessionView>, editing: RwSignal<Editing>) -> impl Into
 
             // Read out of `session` before the closures below capture it.
             let date_label = session.date_label.clone();
-            let service_label = session.service_type.label();
+            let service_label = session.service_label.clone();
             let theme = session.theme_name.clone();
             let price_label = session.price_label();
             let capacity = format!("{} / {}", session.booked_persons, session.max_persons);
@@ -219,7 +220,7 @@ fn SessionTable(rows: Vec<SessionView>, editing: RwSignal<Editing>) -> impl Into
                 <TableHeader>
                     <TableRow>
                         <TableHead>"Date"</TableHead>
-                        <TableHead>"Atelier"</TableHead>
+                        <TableHead>"Service"</TableHead>
                         <TableHead>"Thème"</TableHead>
                         <TableHead>"Prix"</TableHead>
                         <TableHead>"Inscrits"</TableHead>
@@ -244,16 +245,13 @@ fn SessionForm(
     let id = session.as_ref().map(|s| s.id.clone()).unwrap_or_default();
     let editing_existing = !id.is_empty();
 
-    // A creation starts on the first kind rather than on nothing, so the form always
-    // posts a service; the dropdown carries its value in a hidden input, which the
-    // browser would not enforce as `required`.
-    let selected_kind = existing
+    // Workshops are rows now, so this dropdown is fetched like the theme one below.
+    // Loaded once per form rather than per render.
+    let services = Resource::new(|| (), |_| async move { all_services().await });
+    let selected_service = existing
         .as_ref()
-        .map(|session| session.service_type)
-        .unwrap_or(ServiceType::ALL[0]);
+        .map(|session| (session.service_slug.clone(), session.service_label.clone()));
 
-    // Themes are data, not an enum like the service kinds, so the dropdown has to be
-    // fetched. Loaded once per form rather than per render.
     let themes = Resource::new(|| (), |_| async move { all_themes().await });
     let selected_theme = existing
         .as_ref()
@@ -285,34 +283,107 @@ fn SessionForm(
                         <div class="grid gap-4 md:grid-cols-2">
 
                             <div class="grid gap-3">
-                                <Label r#for="service">"Type d'atelier"</Label>
-                                <Select
-                                    class="w-full max-w-sm"
-                                    name="service".to_string()
-                                    default_value=selected_kind.slug().to_string()
-                                    default_label=selected_kind.label().to_string()
-                                >
-                                    <SelectTrigger id="service">
-                                        <SelectValue placeholder="Type d'atelier"/>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectGroup>
-                                            {ServiceType::ALL
-                                                .into_iter()
-                                                .map(|kind| {
-                                                    view! {
-                                                        <SelectOption
-                                                            value=kind.slug()
-                                                            label=kind.label().to_string()
-                                                        >
-                                                            {kind.label()}
-                                                        </SelectOption>
-                                                    }
-                                                })
-                                                .collect::<Vec<_>>()}
-                                        </SelectGroup>
-                                    </SelectContent>
-                                </Select>
+                                <Label r#for="service">"Service"</Label>
+                                <Transition fallback=|| {
+                                    view! {
+                                        <p class="text-sm text-muted-foreground">"Chargement…"</p>
+                                    }
+                                }>
+                                    {move || {
+                                        let selected = selected_service.clone();
+                                        Suspend::new(async move {
+                                            // Only the bookable ones: a workshop run
+                                            // for a structure agrees on its dates
+                                            // directly, and the server refuses one
+                                            // here anyway.
+                                            let list = services
+                                                .await
+                                                .map(|list| {
+                                                    list.into_iter()
+                                                        .filter(|service| !service.pro)
+                                                        .collect::<Vec<_>>()
+                                                });
+
+                                            match list {
+                                                Err(error) => {
+                                                    EitherOf3::A(
+                                                        view! {
+                                                            <Alert variant=AlertVariant::Destructive>
+                                                                {user_message(&error)}
+                                                            </Alert>
+                                                        },
+                                                    )
+                                                }
+                                                // Nothing to pick from: point at the
+                                                // page that fixes it rather than show
+                                                // a dropdown that could post nothing.
+                                                Ok(list) if list.is_empty() => {
+                                                    EitherOf3::B(
+                                                        view! {
+                                                            <Alert>
+                                                                <AlertTitle>"Aucun service réservable"</AlertTitle>
+                                                                <AlertDescription>
+                                                                    "Créez d'abord un service pour pouvoir lui associer une séance. "
+                                                                    <a
+                                                                        href="/admin/services"
+                                                                        class="underline underline-offset-4"
+                                                                    >
+                                                                        "Gérer les services"
+                                                                    </a>
+                                                                </AlertDescription>
+                                                            </Alert>
+                                                        },
+                                                    )
+                                                }
+                                                Ok(list) => {
+                                                    // Falls back to the first one, both
+                                                    // for a creation and for a session
+                                                    // whose workshop has since been
+                                                    // turned into one for structures.
+                                                    let (value, label) = selected
+                                                        .filter(|(slug, _)| {
+                                                            list.iter().any(|service| &service.slug == slug)
+                                                        })
+                                                        .unwrap_or_else(|| {
+                                                            (list[0].slug.clone(), list[0].label.clone())
+                                                        });
+
+                                                    EitherOf3::C(
+                                                        view! {
+                                                            <Select
+                                                                class="w-full max-w-sm"
+                                                                name="service".to_string()
+                                                                default_value=value
+                                                                default_label=label
+                                                            >
+                                                                <SelectTrigger id="service">
+                                                                    <SelectValue placeholder="Service"/>
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectGroup>
+                                                                        {list
+                                                                            .into_iter()
+                                                                            .map(|service| {
+                                                                                view! {
+                                                                                    <SelectOption
+                                                                                        value=service.slug
+                                                                                        label=service.label.clone()
+                                                                                    >
+                                                                                        {service.label}
+                                                                                    </SelectOption>
+                                                                                }
+                                                                            })
+                                                                            .collect::<Vec<_>>()}
+                                                                    </SelectGroup>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        },
+                                                    )
+                                                }
+                                            }
+                                        })
+                                    }}
+                                </Transition>
                             </div>
 
                             <div class="grid gap-3">
@@ -490,7 +561,7 @@ fn DeleteConfirmation(
                     {format!(
                         "{} · {} · {}",
                         session.date_label,
-                        session.service_type.label(),
+                        session.service_label,
                         session.theme_name,
                     )}
                 </CardDescription>
@@ -601,11 +672,12 @@ fn AffectedBookings(session_id: String) -> impl IntoView {
 mod tests {
     use super::*;
 
-    /// The service dropdown reads a context provided by its own `Select`, which only
-    /// blows up once the form is actually rendered. Nothing about it fails to compile.
+    /// The workshop and theme dropdowns are both fetched now, so what a test can
+    /// see of this form is the fields around them -- and that they are there at all
+    /// is what the server function's parameter list depends on.
     #[test]
-    fn creation_form_renders_every_service_option() {
-        // The theme dropdown is fetched, so the form owns a `Resource`.
+    fn the_creation_form_carries_the_fields_the_server_expects() {
+        // Two dropdowns are fetched, so the form owns two `Resource`s.
         crate::pages::admin::init_test_executor();
 
         let html = Owner::new().with(|| {
@@ -619,18 +691,22 @@ mod tests {
             .to_html()
         });
 
-        for kind in ServiceType::ALL {
+        assert!(html.contains("Nouvelle séance"), "the title should say so: {html}");
+
+        for field in ["date", "price", "max_persons"] {
             assert!(
-                html.contains(kind.label()),
-                "{} should be offered: {html}",
-                kind.label()
+                html.contains(&format!(r#"name="{field}""#)),
+                "{field} is not posted: {html}"
             );
         }
-        // The first kind stands in for "nothing chosen yet", so the form always posts
-        // a service even though a hidden input cannot be `required`.
-        assert!(
-            html.contains(&format!(r#"value="{}""#, ServiceType::ALL[0].slug())),
-            "the default service should be posted: {html}"
-        );
+        // The labels stand where the two fetched dropdowns will land. Matched on
+        // what they point at rather than on their wording, which is one rename away
+        // from making this pass on unrelated markup.
+        for field in ["service", "theme"] {
+            assert!(
+                html.contains(&format!(r#"for="{field}""#)),
+                "no label for {field}: {html}"
+            );
+        }
     }
 }

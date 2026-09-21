@@ -6,6 +6,7 @@ pub mod label;
 pub mod navigation_menu;
 pub mod number_field;
 pub mod select;
+pub mod service_icon;
 pub mod table;
 pub mod textarea;
 pub mod theme_toggle;

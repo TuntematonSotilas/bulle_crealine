@@ -1,11 +1,11 @@
 use icons::Check;
-use leptos::either::Either;
+use leptos::either::{Either, EitherOf3};
 use leptos::prelude::*;
 use leptos_meta::Title;
 use leptos_router::hooks::use_params_map;
 
 use crate::api::bookings::CreateBooking;
-use crate::api::sessions::upcoming_sessions;
+use crate::api::sessions::upcoming_offer;
 use crate::auth::user_message;
 use crate::components::ui::alert::{Alert, AlertDescription, AlertTitle, AlertVariant};
 use crate::components::ui::button::Button;
@@ -14,67 +14,72 @@ use crate::components::ui::input::{Input, InputType};
 use crate::components::ui::label::Label;
 use crate::components::ui::number_field::NumberField;
 use crate::components::ui::textarea::Textarea;
-use crate::models::{MAX_PERSONS_PER_BOOKING, ServiceType, SessionView};
+use crate::models::{MAX_PERSONS_PER_BOOKING, ServiceView, SessionView};
 
 /// Booking page for one kind of workshop, at `/booking/<slug>`.
+///
+/// The workshop is fetched rather than derived from the slug: workshops are rows
+/// the admin edits, so only the server can say whether one exists and whether it
+/// takes online bookings at all.
 #[component]
 pub fn BookingPage() -> impl IntoView {
     let params = use_params_map();
     let slug = move || params.read().get("service").unwrap_or_default();
 
-    // Re-runs when the slug changes, so moving between workshop kinds does not
-    // leave the previous list on screen.
-    let sessions = Resource::new(slug, |slug| async move { upcoming_sessions(slug).await });
+    // Re-runs when the slug changes, so moving between workshops does not leave
+    // the previous list on screen.
+    let offer = Resource::new(slug, |slug| async move { upcoming_offer(slug).await });
 
     view! {
         <Title text="Réserver un atelier — Bulle Créaline"/>
 
-        {move || match ServiceType::from_slug(&slug()) {
-            None => Either::Left(view! { <UnknownService/> }),
-            Some(service) => {
-                Either::Right(
-                    view! {
-                        <div class="flex flex-col gap-6 mx-auto max-w-2xl">
-                            <div>
-                                <h1 class="text-2xl font-semibold">"Réserver"</h1>
-                                <p class="text-muted-foreground">{service.label()}</p>
-                            </div>
-
-                            <Transition fallback=|| {
-                                view! {
-                                    <p class="text-sm text-muted-foreground">
-                                        "Chargement des séances…"
-                                    </p>
-                                }
-                            }>
-                                {move || Suspend::new(async move {
-                                    match sessions.await {
-                                        Err(error) => {
-                                            Either::Left(
-                                                view! {
-                                                    <Alert variant=AlertVariant::Destructive>
-                                                        {user_message(&error)}
-                                                    </Alert>
-                                                },
-                                            )
-                                        }
-                                        Ok(available) => {
-                                            Either::Right(
-                                                view! { <BookingForm service=service sessions=available/> },
-                                            )
-                                        }
-                                    }
-                                })}
-                            </Transition>
-                        </div>
-                    },
-                )
+        <Transition fallback=|| {
+            view! {
+                <p class="text-sm text-muted-foreground">"Chargement des séances…"</p>
             }
-        }}
+        }>
+            {move || Suspend::new(async move {
+                match offer.await {
+                    Err(error) => {
+                        EitherOf3::A(
+                            view! {
+                                <div class="mx-auto max-w-2xl">
+                                    <Alert variant=AlertVariant::Destructive>
+                                        {user_message(&error)}
+                                    </Alert>
+                                </div>
+                            },
+                        )
+                    }
+                    // Either no such workshop, or one run for a structure, which
+                    // agrees on its dates directly and has nothing to offer here.
+                    Ok(None) => EitherOf3::B(view! { <UnknownService/> }),
+                    Ok(Some(offer)) => {
+                        let label = offer.service.label.clone();
+
+                        EitherOf3::C(
+                            view! {
+                                <div class="flex flex-col gap-6 mx-auto max-w-2xl">
+                                    <div>
+                                        <h1 class="text-2xl font-semibold">"Réserver"</h1>
+                                        <p class="text-muted-foreground">{label}</p>
+                                    </div>
+
+                                    <BookingForm
+                                        service=offer.service
+                                        sessions=offer.sessions
+                                    />
+                                </div>
+                            },
+                        )
+                    }
+                }
+            })}
+        </Transition>
     }
 }
 
-/// Shown when the URL carries a workshop kind that does not exist.
+/// Shown when the URL carries a workshop that cannot be booked.
 #[component]
 fn UnknownService() -> impl IntoView {
     view! {
@@ -93,7 +98,7 @@ fn UnknownService() -> impl IntoView {
 
 /// The session picker and the visitor's details.
 #[component]
-fn BookingForm(service: ServiceType, sessions: Vec<SessionView>) -> impl IntoView {
+fn BookingForm(service: ServiceView, sessions: Vec<SessionView>) -> impl IntoView {
     let booking = ServerAction::<CreateBooking>::new();
     let pending = booking.pending();
     let result = booking.value();
@@ -165,6 +170,10 @@ fn BookingForm(service: ServiceType, sessions: Vec<SessionView>) -> impl IntoVie
 
     Either::Right(view! {
         {move || {
+            // Cloned per run rather than moved: the closure re-runs on every change
+            // to the action's value, and a `ServiceView` carries strings.
+            let service = service.clone();
+
             confirmed()
                 .map(|session_label| {
                     view! { <BookingConfirmed service=service session_label=session_label/> }
@@ -271,7 +280,7 @@ fn BookingForm(service: ServiceType, sessions: Vec<SessionView>) -> impl IntoVie
 
 /// Replaces the form once the booking is recorded.
 #[component]
-fn BookingConfirmed(service: ServiceType, session_label: String) -> impl IntoView {
+fn BookingConfirmed(service: ServiceView, session_label: String) -> impl IntoView {
     let heading_label = session_label.clone();
 
     view! {
@@ -295,7 +304,7 @@ fn BookingConfirmed(service: ServiceType, session_label: String) -> impl IntoVie
                     <dl class="grid gap-3 p-4 text-sm rounded-lg border sm:grid-cols-2">
                         <div class="grid gap-1">
                             <dt class="text-muted-foreground">"Atelier"</dt>
-                            <dd class="font-medium">{service.label()}</dd>
+                            <dd class="font-medium">{service.label.clone()}</dd>
                         </div>
                         <div class="grid gap-1">
                             <dt class="text-muted-foreground">"Séance"</dt>
@@ -329,10 +338,27 @@ fn BookingConfirmed(service: ServiceType, session_label: String) -> impl IntoVie
 mod tests {
     use super::*;
 
+    fn service() -> ServiceView {
+        ServiceView {
+            id: "651d1f0a0000000000000003".to_owned(),
+            slug: "aperos-creatifs".to_owned(),
+            label: "Apéros créatifs (adultes)".to_owned(),
+            description: "Une soirée entre adultes.".to_owned(),
+            age: "À partir de 18 ans".to_owned(),
+            steps: Vec::new(),
+            icon: "Wine".to_owned(),
+            pro: false,
+            position: 0,
+        }
+    }
+
     fn session() -> SessionView {
         SessionView {
             id: "651d1f0a0000000000000001".to_owned(),
-            service_type: ServiceType::AperosCreatifs,
+            service_slug: "aperos-creatifs".to_owned(),
+            service_label: "Apéros créatifs (adultes)".to_owned(),
+            service_description: "Une soirée entre adultes.".to_owned(),
+            service_path: "/services/aperos-creatifs".to_owned(),
             date_label: "dimanche 5 juillet 2026 à 14h00".to_owned(),
             date_input: "2026-07-05T14:00".to_owned(),
             theme_id: "651d1f0a0000000000000002".to_owned(),
@@ -346,10 +372,7 @@ mod tests {
 
     fn form_html() -> String {
         Owner::new().with(|| {
-            view! {
-                <BookingForm service=ServiceType::AperosCreatifs sessions=vec![session()]/>
-            }
-            .to_html()
+            view! { <BookingForm service=service() sessions=vec![session()]/> }.to_html()
         })
     }
 
@@ -384,5 +407,16 @@ mod tests {
         let html = form_html();
 
         assert!(html.contains("Adresse e-mail (facultatif)"), "{html}");
+    }
+
+    /// With no date to pick, the page's one job is to point back at the workshop,
+    /// whose path is now built from the row rather than from an enum.
+    #[test]
+    fn a_workshop_with_no_date_points_back_at_its_page() {
+        let html = Owner::new()
+            .with(|| view! { <BookingForm service=service() sessions=vec![]/> }.to_html());
+
+        assert!(html.contains("Aucune séance programmée"), "{html}");
+        assert!(html.contains(r#"href="/services/aperos-creatifs""#), "{html}");
     }
 }

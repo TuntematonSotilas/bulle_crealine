@@ -2,32 +2,43 @@
 
 use leptos::prelude::*;
 
-use crate::models::{BookingContact, SessionView};
+use crate::models::{BookingContact, BookingOffer, SessionView};
 
-/// Upcoming sessions of one kind, for the public booking page.
+/// One workshop and its upcoming dates, for the public booking page.
+///
+/// `Ok(None)` means the URL names no bookable workshop -- either none at all, or
+/// one run for a structure, which agrees on its dates directly and so has nothing
+/// to offer here.
 ///
 /// Open to everyone: it exposes nothing a visitor cannot already read on the
-/// matching service page.
+/// matching workshop page.
 #[server]
-pub async fn upcoming_sessions(service: String) -> Result<Vec<SessionView>, ServerFnError> {
+pub async fn upcoming_offer(service: String) -> Result<Option<BookingOffer>, ServerFnError> {
     use crate::api::log_failure;
-    use crate::db::session;
-    use crate::models::ServiceType;
+    use crate::db::{service as workshop, session};
 
-    let service_type = ServiceType::from_slug(service.trim())
-        .ok_or_else(|| ServerFnError::new("Ce type d'atelier n'existe pas."))?;
+    let Some(found) = workshop::find_by_slug(service.trim())
+        .await
+        .map_err(|error| log_failure("loading a workshop for its booking page", error))?
+        .filter(|found| !found.pro)
+    else {
+        return Ok(None);
+    };
 
-    let sessions = session::list_upcoming(service_type)
+    let sessions = session::list_upcoming(&found.slug)
         .await
         .map_err(|error| log_failure("listing upcoming sessions", error))?;
 
-    with_booked_persons(sessions).await
+    Ok(Some(BookingOffer {
+        service: found.to_view(),
+        sessions: with_booked_persons(sessions).await?,
+    }))
 }
 
 /// The next few sessions on offer, every kind of workshop mixed together and
 /// soonest first, for the home page.
 ///
-/// Open to everyone, like [`upcoming_sessions`].
+/// Open to everyone, like [`upcoming_offer`].
 #[server]
 pub async fn next_sessions() -> Result<Vec<SessionView>, ServerFnError> {
     use crate::api::log_failure;
@@ -72,19 +83,24 @@ pub async fn save_session(
     use crate::api::log_failure;
     use crate::auth::require_admin;
     use crate::db::session::{self, SessionDoc};
-    use crate::db::{booking, datetime, theme};
-    use crate::models::ServiceType;
+    use crate::db::{booking, datetime, service as workshop, theme};
 
     require_admin()?;
 
-    let service_type = ServiceType::from_slug(service.trim())
-        .ok_or_else(|| ServerFnError::new("Choisissez un type d'atelier."))?;
+    // Checked against the collection rather than merely parsed: workshops are rows
+    // now, so a stale dropdown could post one that has since been deleted or turned
+    // into a workshop for structures, which takes no online booking.
+    let service = workshop::find_by_slug(service.trim())
+        .await
+        .map_err(|error| log_failure("checking the workshop of a session", error))?
+        .filter(|found| !found.pro)
+        .ok_or_else(|| ServerFnError::new("Choisissez un service."))?;
+
     let date = datetime::parse_input(&date)
         .ok_or_else(|| ServerFnError::new("Cette date n'est pas valide."))?;
 
-    // Checked against the collection, not just parsed: a stale dropdown could still
-    // post a theme that has since been deleted, and the listing would then show the
-    // session with no theme at all.
+    // Same for the theme: a stale dropdown could still post one that has since been
+    // deleted, and the listing would then show the session with no theme at all.
     let theme_id = session::parse_id(theme_id.trim())
         .map_err(|_| ServerFnError::new("Choisissez un thème."))?;
     if theme::find(theme_id)
@@ -106,7 +122,7 @@ pub async fn save_session(
 
     let document = SessionDoc {
         id: None,
-        service_type,
+        service_type: service.slug,
         date,
         theme_id,
         price,
@@ -184,8 +200,13 @@ pub async fn session_contacts(id: String) -> Result<Vec<BookingContact>, ServerF
         .collect())
 }
 
-/// Resolves how many people each session carries and what its theme is called,
-/// in one round trip each rather than one per session.
+/// Resolves how many people each session carries, what its theme is called and
+/// which workshop it belongs to, in one round trip each rather than one per
+/// session.
+///
+/// The workshop hop is what pays for making workshops editable: a session view
+/// used to derive its label and description from an enum variant, and now carries
+/// them resolved so that no page has to join anything.
 #[cfg(feature = "ssr")]
 async fn with_booked_persons(
     sessions: Vec<crate::db::session::SessionDoc>,
@@ -193,7 +214,7 @@ async fn with_booked_persons(
     use std::collections::HashMap;
 
     use crate::api::log_failure;
-    use crate::db::{booking, theme};
+    use crate::db::{booking, service, theme};
 
     let ids = sessions.iter().filter_map(|session| session.id).collect();
     let booked = booking::booked_persons_by_session(ids)
@@ -213,6 +234,15 @@ async fn with_booked_persons(
         .map(|found| (found.id, found))
         .collect();
 
+    // The whole collection rather than the slugs in hand: there are a handful of
+    // workshops, so one unfiltered read beats building an `$in` out of them.
+    let services: HashMap<_, _> = service::list_all()
+        .await
+        .map_err(|error| log_failure("resolving the workshops of a list of sessions", error))?
+        .into_iter()
+        .map(|found| (found.slug.clone(), found))
+        .collect();
+
     Ok(sessions
         .iter()
         .map(|session| {
@@ -221,7 +251,11 @@ async fn with_booked_persons(
                 .and_then(|id| booked.get(&id).copied())
                 .unwrap_or(0);
 
-            session.to_view(taken, themes.get(&session.theme_id))
+            session.to_view(
+                taken,
+                themes.get(&session.theme_id),
+                services.get(&session.service_type),
+            )
         })
         .collect())
 }

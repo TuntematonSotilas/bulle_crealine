@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::models::ServiceType;
-
 /// Largest party a single booking may declare.
 ///
 /// Not a business rule so much as a guard: a form is free to post any number, and
@@ -131,7 +129,11 @@ pub struct BookingView {
     /// Hex form of the Mongo `ObjectId`.
     pub id: String,
     pub session_id: String,
-    pub service_type: ServiceType,
+    /// Name of the kind of workshop, resolved when the listing is built.
+    ///
+    /// The booking stores the slug; this falls back to it when the workshop has
+    /// since been deleted, so an old booking still reads as something.
+    pub service_label: String,
     /// Label of the booked session, or a stand-in when that session was deleted.
     pub session_date_label: String,
     pub session_theme: String,

@@ -8,7 +8,7 @@ use futures_util::TryStreamExt;
 use serde::{Deserialize, Serialize};
 
 use crate::db::{DbError, bookings};
-use crate::models::{BookingContact, ServiceType};
+use crate::models::BookingContact;
 
 /// A booking document.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -17,8 +17,12 @@ pub struct BookingDoc {
     pub id: Option<ObjectId>,
     /// The session booked. Kept even if that session is later deleted.
     pub session_id: ObjectId,
-    /// Copied from the session so a booking stays readable on its own.
-    pub service_type: ServiceType,
+    /// Slug of the kind of workshop, copied from the session so a booking stays
+    /// readable on its own.
+    ///
+    /// A plain string, and still under this name: that is what every booking taken
+    /// while workshops were an enum already holds.
+    pub service_type: String,
     pub name: String,
     /// Lowercased. Optional: a visitor may leave it blank.
     pub email: String,

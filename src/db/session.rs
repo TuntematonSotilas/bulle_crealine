@@ -5,16 +5,23 @@ use bson::{DateTime, doc};
 use futures_util::TryStreamExt;
 use serde::{Deserialize, Serialize};
 
+use crate::db::service::ServiceDoc;
 use crate::db::theme::ThemeSummaryDoc;
 use crate::db::{DbError, datetime, sessions};
-use crate::models::{ServiceType, SessionView};
+use crate::models::SessionView;
 
 /// A session document.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SessionDoc {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
-    pub service_type: ServiceType,
+    /// Slug of the kind of workshop, in [`crate::db::service`].
+    ///
+    /// A plain string rather than a foreign key, and deliberately still named
+    /// `service_type`: that is the field, and the value, every session written
+    /// while workshops were an enum already carries. Workshops became editable
+    /// without a single stored document changing.
+    pub service_type: String,
     /// French wall-clock time, stored verbatim; see [`crate::db::datetime`].
     pub date: DateTime,
     /// The theme this session is about, in [`crate::db::theme`].
@@ -28,14 +35,31 @@ impl SessionDoc {
     /// Turns the document into what the browser gets, given how many people are
     /// already booked on it and the theme it points at.
     ///
-    /// `theme` is passed in rather than looked up here so that listing sessions
-    /// resolves every theme in one round trip. It falls back to a marker and no
-    /// photo when the theme is missing: deleting a referenced theme is refused, so
-    /// that only happens if the collection was edited by hand.
-    pub fn to_view(&self, booked_persons: u32, theme: Option<&ThemeSummaryDoc>) -> SessionView {
+    /// `theme` and `service` are passed in rather than looked up here so that
+    /// listing sessions resolves each of them in one round trip. Both fall back to
+    /// a marker when missing: deleting either is refused while a session uses it,
+    /// so that only happens if the collection was edited by hand.
+    pub fn to_view(
+        &self,
+        booked_persons: u32,
+        theme: Option<&ThemeSummaryDoc>,
+        service: Option<&ServiceDoc>,
+    ) -> SessionView {
         SessionView {
             id: self.id.map(|id| id.to_hex()).unwrap_or_default(),
-            service_type: self.service_type,
+            service_slug: self.service_type.clone(),
+            service_label: service
+                .map(|found| found.label.clone())
+                .unwrap_or_else(|| "Atelier supprimé".to_owned()),
+            service_description: service
+                .map(|found| found.description.clone())
+                .unwrap_or_default(),
+            // Home rather than a link into nothing: a card whose workshop is gone
+            // still shows a date worth reading, and "voir +" has to lead somewhere.
+            service_path: service.map(ServiceDoc::to_view).map_or_else(
+                || "/".to_owned(),
+                |view| view.page_path(),
+            ),
             date_label: datetime::to_label(self.date),
             date_input: datetime::to_input(self.date),
             theme_id: self.theme_id.to_hex(),
@@ -56,9 +80,9 @@ pub fn parse_id(id: &str) -> Result<ObjectId, DbError> {
 }
 
 /// Sessions of one kind that have not started yet, soonest first.
-pub async fn list_upcoming(service_type: ServiceType) -> Result<Vec<SessionDoc>, DbError> {
+pub async fn list_upcoming(service_slug: &str) -> Result<Vec<SessionDoc>, DbError> {
     let filter = doc! {
-        "service_type": service_type.slug(),
+        "service_type": service_slug,
         "date": { "$gte": DateTime::now() },
     };
 
@@ -129,6 +153,16 @@ pub async fn count_for_theme(theme_id: ObjectId) -> Result<u64, DbError> {
     Ok(sessions()?.count_documents(doc! { "theme_id": theme_id }).await?)
 }
 
+/// How many sessions are filed under a kind of workshop.
+///
+/// Gates deleting that workshop: the sessions would keep a slug nothing answers
+/// to, and both the admin table and the booking page would lose their label.
+pub async fn count_for_service(service_slug: &str) -> Result<u64, DbError> {
+    Ok(sessions()?
+        .count_documents(doc! { "service_type": service_slug })
+        .await?)
+}
+
 /// The sessions using a theme, soonest first, to spell out what changing it affects.
 pub async fn list_for_theme(theme_id: ObjectId) -> Result<Vec<SessionDoc>, DbError> {
     let found = sessions()?
@@ -155,7 +189,7 @@ pub async fn insert(session: &SessionDoc) -> Result<ObjectId, DbError> {
 pub async fn update(id: ObjectId, session: &SessionDoc) -> Result<(), DbError> {
     let update = doc! {
         "$set": {
-            "service_type": session.service_type.slug(),
+            "service_type": &session.service_type,
             "date": session.date,
             "theme_id": session.theme_id,
             "price": session.price,

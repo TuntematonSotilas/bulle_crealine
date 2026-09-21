@@ -5,8 +5,7 @@
 //! stored live in [`crate::db`].
 
 pub mod booking;
-pub mod service_pro_type;
-pub mod service_type;
+pub mod service;
 pub mod session;
 pub mod theme;
 
@@ -14,7 +13,8 @@ pub use booking::{
     BookingContact, BookingProblem, BookingRequest, BookingView, MAX_PERSONS_PER_BOOKING,
     phone_key,
 };
-pub use service_pro_type::ServiceProType;
-pub use service_type::ServiceType;
-pub use session::{HOME_SESSIONS, SessionView};
+pub use service::{
+    SERVICE_ICONS, ServiceView, icon_label, is_valid_slug, section_prefix, section_title, slugify,
+};
+pub use session::{BookingOffer, HOME_SESSIONS, SessionView};
 pub use theme::{AffectedSession, MAX_PHOTO_BYTES, MAX_PHOTO_LABEL, ThemeView};

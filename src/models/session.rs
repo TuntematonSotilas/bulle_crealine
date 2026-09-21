@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::models::ServiceType;
+use crate::models::ServiceView;
 
 /// How many upcoming sessions the home page lists, every kind of workshop mixed
 /// together and soonest first.
@@ -21,7 +21,18 @@ pub const HOME_SESSIONS: usize = 6;
 pub struct SessionView {
     /// Hex form of the Mongo `ObjectId`.
     pub id: String,
-    pub service_type: ServiceType,
+    /// Slug of the kind of workshop, which is what the admin form posts back and
+    /// what `/booking/<slug>` carries.
+    pub service_slug: String,
+    /// Name of that workshop, and the two lines below: resolved server-side.
+    ///
+    /// Workshops are rows now rather than an enum, so a page could no longer
+    /// derive any of this from the slug on its own. Carried here rather than
+    /// fetched by the card, which would turn one grid into one request per tile.
+    pub service_label: String,
+    pub service_description: String,
+    /// Where that workshop's own page lives, `"/"` when it has been deleted.
+    pub service_path: String,
     /// Human label, e.g. `"dimanche 5 juillet 2026 à 14h00"`.
     pub date_label: String,
     /// `"2026-07-05T14:00"`, ready for an `<input type="datetime-local">`.
@@ -39,6 +50,18 @@ pub struct SessionView {
     pub max_persons: u32,
     /// How many people are already booked, summed over every booking.
     pub booked_persons: u32,
+}
+
+/// What the booking page shows, fetched in one round trip.
+///
+/// The workshop comes along with its dates because the page needs it even when
+/// there are none: it still has to name the workshop and link back to its page.
+/// Workshops being rows now, that could no longer be derived from the URL.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BookingOffer {
+    pub service: ServiceView,
+    /// Upcoming sessions of that workshop, soonest first. May be empty.
+    pub sessions: Vec<SessionView>,
 }
 
 impl SessionView {
@@ -79,7 +102,10 @@ mod tests {
     fn session(max_persons: u32, booked_persons: u32) -> SessionView {
         SessionView {
             id: "651d1f0a0000000000000000".to_owned(),
-            service_type: ServiceType::ApresMidisCreatifs,
+            service_slug: "apres-midis-creatifs".to_owned(),
+            service_label: "Ateliers après-midi créatifs (adultes)".to_owned(),
+            service_description: "Des ateliers pour tous les niveaux.".to_owned(),
+            service_path: "/services/apres-midis-creatifs".to_owned(),
             date_label: "dimanche 5 juillet 2026 à 14h00".to_owned(),
             date_input: "2026-07-05T14:00".to_owned(),
             theme_id: "651d1f0a0000000000000001".to_owned(),

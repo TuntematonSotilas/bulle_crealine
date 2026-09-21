@@ -7,17 +7,22 @@ use crate::models::SessionView;
 
 /// One upcoming session, as the home page advertises it.
 ///
-/// Everything shown is already on the [`SessionView`] or derivable from its kind
-/// of workshop, so the card needs no lookup of its own.
+/// Everything shown is already on the [`SessionView`], the workshop's own wording
+/// included, so the card needs no lookup of its own. That matters more than it
+/// used to: workshops are rows now, so a card that resolved its own would turn one
+/// grid into one request per tile.
 #[component]
 pub fn SessionCard(session: SessionView) -> impl IntoView {
-    let service = session.service_type;
     // Read before the view is destructured, and not reactive: the list is built
     // once from a loaded resource, so a full session stays full until it reloads.
     let full = session.is_full();
     let availability = session.availability_label();
 
     let SessionView {
+        service_slug,
+        service_label,
+        service_description,
+        service_path,
         date_label,
         theme_name,
         photo_url,
@@ -56,7 +61,7 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
         })
     } else {
         Either::Right(view! {
-            <Button size=ButtonSize::Sm href=format!("/booking/{}", service.slug())>
+            <Button size=ButtonSize::Sm href=format!("/booking/{service_slug}")>
                 "Réserver"
             </Button>
         })
@@ -80,7 +85,7 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
                 // pale surface rather than in the accent colour, which at this
                 // size would not clear the contrast floor.
                 <span class="px-2.5 py-0.5 text-xs font-medium rounded-full bg-surface text-surface-foreground">
-                    {service.label()}
+                    {service_label}
                 </span>
             </header>
 
@@ -93,7 +98,7 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
 
             <footer class="flex flex-col flex-1 gap-2.5 p-4">
                 <p class="text-sm leading-relaxed text-muted-foreground">
-                    {service.description()}
+                    {service_description}
                 </p>
 
                 <div class="flex gap-2 items-start text-sm">
@@ -108,7 +113,7 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
                 <div class="flex gap-3 justify-between items-center pt-1 mt-auto">
                     {action}
                     <a
-                        href=service.page_path()
+                        href=service_path
                         class="inline-flex gap-1 items-center text-sm font-medium underline-offset-4 text-primary hover:underline"
                     >
                         "voir +"
@@ -123,12 +128,19 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
 #[cfg(all(test, feature = "ssr"))]
 mod tests {
     use super::*;
-    use crate::models::ServiceType;
+
+    /// A session already resolved the way the server hands it over: the workshop
+    /// is a row now, so its wording arrives on the view rather than being derived.
+    const LABEL: &str = "Apéros créatifs (adultes)";
+    const DESCRIPTION: &str = "Une soirée entre adultes autour d'un verre.";
 
     fn session(booked_persons: u32) -> SessionView {
         SessionView {
             id: "651d1f0a0000000000000001".to_owned(),
-            service_type: ServiceType::AperosCreatifs,
+            service_slug: "aperos-creatifs".to_owned(),
+            service_label: LABEL.to_owned(),
+            service_description: DESCRIPTION.to_owned(),
+            service_path: "/services/aperos-creatifs".to_owned(),
             date_label: "dimanche 5 juillet 2026 à 14h00".to_owned(),
             date_input: "2026-07-05T14:00".to_owned(),
             theme_id: "651d1f0a0000000000000002".to_owned(),
@@ -166,9 +178,9 @@ mod tests {
         let html = card_html(session(5));
 
         assert!(html.contains("/media/theme/651d1f0a0000000000000002?v=7"), "no photo: {html}");
-        assert!(html.contains(ServiceType::AperosCreatifs.label()), "no workshop kind: {html}");
+        assert!(html.contains(LABEL), "no workshop kind: {html}");
         assert!(
-            html.contains(ServiceType::AperosCreatifs.description()),
+            html.contains(DESCRIPTION),
             "no description: {html}"
         );
         assert!(html.contains("dimanche 5 juillet 2026 à 14h00"), "no date: {html}");
@@ -177,7 +189,7 @@ mod tests {
         assert!(html.contains("/booking/aperos-creatifs"), "no booking link: {html}");
         assert!(html.contains("voir +"), "no \"voir +\" link: {html}");
         assert!(
-            html.contains(ServiceType::AperosCreatifs.page_path()),
+            html.contains("/services/aperos-creatifs"),
             "\"voir +\" points nowhere: {html}"
         );
     }
@@ -199,9 +211,9 @@ mod tests {
         let order = [
             at("dimanche 5 juillet 2026 à 14h00"),
             at("Aquarelle"),
-            at(ServiceType::AperosCreatifs.label()),
+            at(LABEL),
             at("/media/theme/"),
-            at(ServiceType::AperosCreatifs.description()),
+            at(DESCRIPTION),
             at("3 places restantes"),
             at("/booking/aperos-creatifs"),
         ];

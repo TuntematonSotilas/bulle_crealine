@@ -284,7 +284,7 @@ fn SessionCell(booking: BookingView) -> impl IntoView {
         <TableCell class="align-top">
             <div class="font-medium">{booking.session_date_label.clone()}</div>
             <div class="text-xs text-muted-foreground">
-                {booking.service_type.label()}
+                {booking.service_label.clone()}
                 {(!booking.session_theme.is_empty())
                     .then(|| format!(" · {}", booking.session_theme))}
             </div>
@@ -343,7 +343,7 @@ mod tests {
         BookingView {
             id: "651d1f0a0000000000000001".to_owned(),
             session_id: "651d1f0a0000000000000002".to_owned(),
-            service_type: crate::models::ServiceType::AperosCreatifs,
+            service_label: "Apéros créatifs (adultes)".to_owned(),
             session_date_label: "samedi 12 avril à 14h".to_owned(),
             session_theme: "Aquarelle".to_owned(),
             name: "Alice Martin".to_owned(),

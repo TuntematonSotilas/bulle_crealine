@@ -1,15 +1,41 @@
 use icons::{Menu, X};
 use leptos::prelude::*;
 
+use crate::api::services::all_services;
+use crate::components::ui::service_icon::ServiceIcon;
 use crate::components::ui::{navigation_menu::*, theme_toggle::ThemeToggle};
+use crate::models::ServiceView;
 
-
+/// The site's navigation, in its two shapes.
+///
+/// The workshop entries come from the collection, so adding one in the admin area
+/// publishes it in both menus at once. The sections themselves stay written here:
+/// they are the menu's structure, not data, and a heading that came and went with
+/// its contents would make the bar jump while the list loads.
+///
+/// One resource for the two menus rather than one each: both are always in the
+/// DOM, one hidden by a media query, so fetching twice would double the work on
+/// every single page.
 #[component]
 pub fn NavMenu() -> impl IntoView {
+    let services = Resource::new(|| (), |()| async move { all_services().await });
+
     view! {
-        <DesktopNav/>
-        <MobileNav/>
+        <DesktopNav services=services/>
+        <MobileNav services=services/>
     }
+}
+
+/// What both menus read. Named so the two components can take it as one prop.
+type Services = Resource<Result<Vec<ServiceView>, ServerFnError>>;
+
+/// The workshops of one section, in the order the server sorted them.
+fn section(services: &[ServiceView], pro: bool) -> Vec<ServiceView> {
+    services
+        .iter()
+        .filter(|service| service.pro == pro)
+        .cloned()
+        .collect()
 }
 
 /// Small wave set between the mobile menu's top-level sections.
@@ -39,7 +65,7 @@ fn SectionWave() -> impl IntoView {
 
 /// The hover-driven bar, from `md` up.
 #[component]
-fn DesktopNav() -> impl IntoView {
+fn DesktopNav(services: Services) -> impl IntoView {
     view! {
         <div class="hidden justify-center items-center py-8 md:flex">
             <NavigationMenu>
@@ -70,74 +96,23 @@ fn DesktopNav() -> impl IntoView {
                     <NavigationMenuItem>
                         <NavigationMenuTrigger>"Ateliers à domicile"</NavigationMenuTrigger>
                         <NavigationMenuContent>
-                            <div class="w-[320px] p-3">
-                                <ul class="space-y-2">
-                                    <li class="p-1">
-                                        <div class="block text-sm font-medium leading-none text-foreground">
-                                            "Ateliers parents-enfants"
-                                        </div>
-                                        <ul class="mt-2 ml-4 space-y-1 text-sm text-muted-foreground">
-                                            <li>
-                                                <a href="/services/parents-enfants-moins-six" class="block rounded-md px-3 py-2 leading-none no-underline transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                                                    "Moins de 6 ans"
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a href="/services/parents-enfants-six-a-douze" class="block rounded-md px-3 py-2 leading-none no-underline transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                                                    "6 à 12 ans"
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </li>
-                                    <li class="p-1">
-                                        <div class="block text-sm font-medium leading-none text-foreground">
-                                            "Ateliers adultes"
-                                        </div>
-                                        <ul class="mt-2 ml-4 space-y-1 text-sm text-muted-foreground">
-                                            <li>
-                                                <a href="/services/aperos-creatifs" class="block rounded-md px-3 py-2 leading-none no-underline transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                                                    "Apéros créatifs"
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a href="/services/apres-midis-creatifs" class="block rounded-md px-3 py-2 leading-none no-underline transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                                                    "Après-midis créatifs"
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </li>
-                                </ul>
+                            <div class="w-[320px] p-0">
+                                <DesktopServiceLinks services=services pro=false/>
                             </div>
                         </NavigationMenuContent>
                     </NavigationMenuItem>
 
                     <NavigationMenuItem>
-                         <NavigationMenuTrigger>"Autres Ateliers"</NavigationMenuTrigger>
+                        <NavigationMenuTrigger>"Autres Ateliers"</NavigationMenuTrigger>
                         <NavigationMenuContent>
                             <div class="w-[320px] p-0">
-                                <ul class="space-y-2">
-                                    <li class="p-1">
-                                        <a href="/pro/en-institution" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                                            <div class="text-sm font-medium leading-none">"Ateliers en institution"</div>
-                                        </a>
-                                    </li>
-                                    <li class="p-1">
-                                        <a href="/pro/hors-les-murs" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                                            <div class="text-sm font-medium leading-none">"Ateliers hors les murs"</div>
-                                        </a>
-                                    </li>
-                                    <li class="p-1">
-                                        <a href="/pro/individuels" class="block p-3 space-y-1 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                                            <div class="text-sm font-medium leading-none">"Ateliers individuels"</div>
-                                        </a>
-                                    </li>
-                                </ul>
+                                <DesktopServiceLinks services=services pro=true/>
                             </div>
                         </NavigationMenuContent>
                     </NavigationMenuItem>
 
                     <NavigationMenuItem>
-                         <NavigationMenuTrigger>"Moi et mon atelier"</NavigationMenuTrigger>
+                        <NavigationMenuTrigger>"Moi et mon atelier"</NavigationMenuTrigger>
                         <NavigationMenuContent>
                             <div class="w-[320px] p-0">
                                 <ul class="space-y-2">
@@ -170,8 +145,8 @@ fn DesktopNav() -> impl IntoView {
                             </div>
                         </NavigationMenuContent>
                     </NavigationMenuItem>
-                    
-                     <NavigationMenuItem>
+
+                    <NavigationMenuItem>
                         <NavigationMenuLink href="/newsletter" class=navigation_menu_trigger_style()>
                             "Newsletter"
                         </NavigationMenuLink>
@@ -186,12 +161,59 @@ fn DesktopNav() -> impl IntoView {
     }
 }
 
+/// The workshops of one section, once they have loaded, in the bar's dropdown.
+#[component]
+fn DesktopServiceLinks(services: Services, pro: bool) -> impl IntoView {
+    view! {
+        <Transition fallback=|| ()>
+            {move || Suspend::new(async move {
+                // A storage failure leaves the dropdown empty rather than putting an
+                // error in the navigation of every page.
+                let list = services.await.map(|list| section(&list, pro)).unwrap_or_default();
+
+                view! { <DesktopServiceList services=list/> }
+            })}
+        </Transition>
+    }
+}
+
+/// The list itself, split from the fetch above so it can be rendered from a plain
+/// `Vec`: what a `Transition` wraps never resolves under a synchronous `to_html`,
+/// which would leave these links untested.
+#[component]
+fn DesktopServiceList(services: Vec<ServiceView>) -> impl IntoView {
+    let links = services
+        .into_iter()
+        .map(|service| {
+            // Both read before `label` is moved into the view.
+            let href = service.page_path();
+            let icon = service.icon;
+
+            view! {
+                <li class="p-1">
+                    <a
+                        href=href
+                        class="flex gap-3 items-center p-3 leading-none no-underline rounded-md transition-colors outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                    >
+                        // Renders nothing when the workshop has no picto, so the
+                        // label simply moves left rather than sitting behind a gap.
+                        <ServiceIcon name=icon class="w-4 h-4 shrink-0 text-heading-soft"/>
+                        <div class="text-sm font-medium leading-none">{service.label}</div>
+                    </a>
+                </li>
+            }
+        })
+        .collect::<Vec<_>>();
+
+    view! { <ul class="space-y-2">{links}</ul> }
+}
+
 /// A bar with a hamburger below `md`, opening the whole viewport.
 ///
 /// Dropdowns are a poor fit for a touch screen: everything is laid out flat here
 /// instead, so no link is more than one tap away.
 #[component]
-fn MobileNav() -> impl IntoView {
+fn MobileNav(services: Services) -> impl IntoView {
     let open = RwSignal::new(false);
     let close = move |_| open.set(false);
 
@@ -248,35 +270,7 @@ fn MobileNav() -> impl IntoView {
                 <ul class="space-y-2">
                     <li>
                         <div class="px-3 py-2 text-lg font-semibold">"Ateliers à domicile"</div>
-                        <ul class="ml-4 mt-2 space-y-1">
-                            <li>
-                                <div class="block px-3 py-2 rounded-md transition-colors hover:bg-accent">
-                                    "Ateliers parents-enfants"
-                                </div>
-                                <ul class="ml-4 mt-1 space-y-1 text-sm text-muted-foreground">
-                                    <li>
-                                        <a href="/services/parents-enfants-moins-six" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
-                                            "Moins de 6 ans"
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="/services/parents-enfants-six-a-douze" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
-                                            "6 à 12 ans"
-                                        </a>
-                                    </li>
-                                </ul>
-                            </li>
-                            <li>
-                                <a href="/services/aperos-creatifs" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
-                                    "Apéros créatifs"
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/services/apres-midis-creatifs" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
-                                    "Après-midis créatifs"
-                                </a>
-                            </li>
-                        </ul>
+                        <MobileServiceLinks services=services pro=false open=open/>
                     </li>
 
                     // Carried by an `<li>` because a `<ul>` takes no other child,
@@ -288,23 +282,7 @@ fn MobileNav() -> impl IntoView {
 
                     <li>
                         <div class="px-3 py-2 text-lg font-semibold">"Autres Ateliers"</div>
-                        <ul class="ml-4 mt-2 space-y-1">
-                            <li>
-                                <a href="/pro/en-institution" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
-                                    "Ateliers en institution"
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/pro/hors-les-murs" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
-                                    "Ateliers hors les murs"
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/pro/individuels" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
-                                    "Ateliers individuels"
-                                </a>
-                            </li>
-                        </ul>
+                        <MobileServiceLinks services=services pro=true open=open/>
                     </li>
 
                     <li aria-hidden="true" class="py-2">
@@ -313,7 +291,7 @@ fn MobileNav() -> impl IntoView {
 
                     <li>
                         <div class="px-3 py-2 text-lg font-semibold">"Moi et mon atelier"</div>
-                        <ul class="ml-4 mt-2 space-y-1">
+                        <ul class="mt-2 ml-4 space-y-1">
                             <li>
                                 <a href="/moi-et-mon-atelier/qui-suis-je" class="block px-3 py-2 rounded-md transition-colors hover:bg-accent" on:click=close>
                                     "Qui-suis-je?"
@@ -347,9 +325,135 @@ fn MobileNav() -> impl IntoView {
     }
 }
 
+/// The workshops of one section, as the mobile panel lists them.
+///
+/// Takes the signal rather than a closure so that each link can close the panel:
+/// a component prop would otherwise need a `Fn` that is `Copy`, `Send` and `Sync`,
+/// which is more ceremony than the one `set` is worth.
+#[component]
+fn MobileServiceLinks(services: Services, pro: bool, open: RwSignal<bool>) -> impl IntoView {
+    view! {
+        <Transition fallback=|| ()>
+            {move || Suspend::new(async move {
+                let list = services.await.map(|list| section(&list, pro)).unwrap_or_default();
+
+                view! { <MobileServiceList services=list open=open/> }
+            })}
+        </Transition>
+    }
+}
+
+/// The list itself, split from the fetch above for the same reason as
+/// [`DesktopServiceList`].
+#[component]
+fn MobileServiceList(services: Vec<ServiceView>, open: RwSignal<bool>) -> impl IntoView {
+    let links = services
+        .into_iter()
+        .map(|service| {
+            // Both read before `label` is moved into the view.
+            let href = service.page_path();
+            let icon = service.icon;
+
+            view! {
+                <li>
+                    <a
+                        href=href
+                        class="flex gap-3 items-center px-3 py-2 rounded-md transition-colors hover:bg-accent"
+                        on:click=move |_| open.set(false)
+                    >
+                        <ServiceIcon name=icon class="w-4 h-4 shrink-0 text-heading-soft"/>
+                        {service.label}
+                    </a>
+                </li>
+            }
+        })
+        .collect::<Vec<_>>();
+
+    view! { <ul class="mt-2 ml-4 space-y-1">{links}</ul> }
+}
+
 #[cfg(all(test, feature = "ssr"))]
 mod tests {
     use super::*;
+
+    fn service(slug: &str, label: &str, icon: &str, pro: bool) -> ServiceView {
+        ServiceView {
+            id: "651d1f0a0000000000000001".to_owned(),
+            slug: slug.to_owned(),
+            label: label.to_owned(),
+            description: String::new(),
+            age: String::new(),
+            steps: Vec::new(),
+            icon: icon.to_owned(),
+            pro,
+            position: 0,
+        }
+    }
+
+    /// Two pictos that differ, so an assertion about one cannot pass on the other.
+    fn services() -> Vec<ServiceView> {
+        vec![
+            service("aperos-creatifs", "Apéros créatifs", "Wine", false),
+            service("en-institution", "Ateliers en institution", "Building2", true),
+        ]
+    }
+
+    /// Both menus are built from the same rows, so the filter is the one place
+    /// they could disagree about where a workshop belongs.
+    #[test]
+    fn a_workshop_appears_in_its_section_and_only_there() {
+        let at_home = section(&services(), false);
+        let for_structures = section(&services(), true);
+
+        assert_eq!(at_home.len(), 1, "{at_home:?}");
+        assert_eq!(at_home[0].slug, "aperos-creatifs");
+        assert_eq!(for_structures.len(), 1, "{for_structures:?}");
+        assert_eq!(for_structures[0].slug, "en-institution");
+    }
+
+    /// The bar and the panel had drifted apart once before, one pointing at
+    /// `/services/` and the other at `/pro/`. They now build the href the same way,
+    /// from the row, so the destination is decided in one place.
+    #[test]
+    fn both_menus_build_the_same_destination() {
+        for service in services() {
+            let expected = if service.pro { "/pro/" } else { "/services/" };
+
+            assert_eq!(
+                service.page_path(),
+                format!("{expected}{}", service.slug),
+                "{} lands in the wrong section",
+                service.slug
+            );
+        }
+    }
+
+    fn desktop_nav() -> String {
+        crate::pages::admin::init_test_executor();
+
+        Owner::new().with(|| {
+            // The theme toggle sits in this bar and reads the context `App` provides.
+            provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
+
+            let services: Services =
+                Resource::new(|| (), |()| async move { Ok(super::tests::services()) });
+
+            view! { <DesktopNav services=services/> }.to_html()
+        })
+    }
+
+    fn mobile_nav() -> String {
+        crate::pages::admin::init_test_executor();
+
+        Owner::new().with(|| {
+            provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
+
+            let services: Services =
+                Resource::new(|| (), |()| async move { Ok(super::tests::services()) });
+
+            view! { <MobileNav services=services/> }.to_html()
+        })
+    }
 
     /// The logo is taller than the text triggers beside it, so it must not inherit
     /// their fixed height, and it must stay out of baseline alignment: an
@@ -357,11 +461,7 @@ mod tests {
     /// the row unevenly and knocks the logo off centre.
     #[test]
     fn the_logo_link_is_block_level_and_as_tall_as_its_image() {
-        let html = Owner::new().with(|| {
-            // The theme toggle sits in this bar and reads the context `App` provides.
-            provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
-            view! { <DesktopNav/> }.to_html()
-        });
+        let html = desktop_nav();
 
         let logo = html
             .split("<a ")
@@ -389,13 +489,8 @@ mod tests {
     /// Everything the logo link renders, bounded by its closing tag so an
     /// assertion cannot pass on markup belonging to a later link.
     fn logo_link() -> String {
-        let html = Owner::new().with(|| {
-            // The theme toggle sits in this bar and reads the context `App` provides.
-            provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
-            view! { <DesktopNav/> }.to_html()
-        });
-
-        html.split("<a ")
+        desktop_nav()
+            .split("<a ")
             .find(|fragment| fragment.contains("/assets/icon.svg"))
             .and_then(|fragment| fragment.split_once("</a>").map(|(inside, _)| inside.to_owned()))
             .expect("the logo link should render")
@@ -446,21 +541,6 @@ mod tests {
         assert!(logo.contains(r#"alt="Accueil""#), "{logo}");
     }
 
-    fn mobile_nav() -> String {
-        Owner::new().with(|| {
-            // The theme toggle sits in this bar and reads the context `App` provides.
-            provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
-            view! { <MobileNav/> }.to_html()
-        })
-    }
-
-    fn desktop_nav() -> String {
-        Owner::new().with(|| {
-            provide_context(crate::components::hooks::use_theme_mode::ThemeMode::init());
-            view! { <DesktopNav/> }.to_html()
-        })
-    }
-
     /// A page reachable from one menu only is invisible to half the visitors, so
     /// every entry under "Moi et mon atelier" has to sit in both.
     #[test]
@@ -476,23 +556,97 @@ mod tests {
         }
     }
 
-    /// The two menus had drifted apart on these three: the bar pointed at
-    /// `/services/`, the panel at `/pro/`. Whichever menu a visitor opens has to
-    /// land them on the same page.
+    /// The two lists, rendered from a plain `Vec`. Going through either nav would
+    /// only ever show the fallback: a `Transition` does not resolve under a
+    /// synchronous `to_html`.
+    fn service_lists(services: Vec<ServiceView>) -> [String; 2] {
+        use leptos_router::components::Router;
+        use leptos_router::location::RequestUrl;
+
+        let for_bar = services.clone();
+        let bar = Owner::new().with(move || {
+            // The links resolve `aria-current` against the location, which
+            // server-side is the request being rendered.
+            provide_context(RequestUrl::new("/"));
+
+            view! {
+                <Router>
+                    <DesktopServiceList services=for_bar/>
+                </Router>
+            }
+            .to_html()
+        });
+
+        let panel = Owner::new().with(move || {
+            provide_context(RequestUrl::new("/"));
+            let open = RwSignal::new(true);
+
+            view! {
+                <Router>
+                    <MobileServiceList services=services open=open/>
+                </Router>
+            }
+            .to_html()
+        });
+
+        [bar, panel]
+    }
+
+    /// Both menus list the same workshops, each pointing at its own page.
     #[test]
-    fn both_menus_send_the_professional_workshops_to_the_same_place() {
-        let bar = desktop_nav();
+    fn both_lists_name_every_workshop_and_link_to_it() {
+        for rendered in service_lists(services()) {
+            for service in services() {
+                assert!(
+                    rendered.contains(&service.label),
+                    "{} is not named: {rendered}",
+                    service.slug
+                );
+                assert!(
+                    rendered.contains(&format!("href=\"{}\"", service.page_path())),
+                    "{} has no link: {rendered}",
+                    service.slug
+                );
+            }
+        }
+    }
+
+    /// The picto is what the admin chose to stand for a workshop, so it belongs
+    /// wherever that workshop is listed -- in both menus, not just on its page.
+    #[test]
+    fn both_lists_draw_the_picto_beside_the_workshop() {
+        for rendered in service_lists(services()) {
+            for service in services() {
+                // The icon crate stamps the name on the `<svg>` it draws, which is
+                // the only way to tell one picto from another in the markup.
+                let drawn = format!(r#"data-name="{}""#, service.icon);
+
+                assert!(rendered.contains(&drawn), "missing {drawn}: {rendered}");
+            }
+        }
+    }
+
+    /// A workshop may carry no picto, and the row then has to close up rather than
+    /// hold an empty square where the icon would have gone.
+    #[test]
+    fn a_workshop_without_a_picto_draws_none() {
+        let bare = vec![service("aperos-creatifs", "Apéros créatifs", "", false)];
+
+        for rendered in service_lists(bare) {
+            assert!(!rendered.contains("<svg"), "drew something: {rendered}");
+            assert!(rendered.contains("Apéros créatifs"), "lost the label: {rendered}");
+        }
+    }
+
+    /// The sections are the menu's own structure, so they render whether or not
+    /// the workshops have loaded: a heading that came and went with its contents
+    /// would make the bar jump on every page.
+    #[test]
+    fn the_sections_stand_whatever_the_workshops_do() {
         let panel = mobile_nav();
 
-        for kind in crate::models::ServiceProType::ALL {
-            let href = format!("href=\"{}\"", kind.page_path());
-
-            assert!(bar.contains(&href), "the bar is missing {href}: {bar}");
-            assert!(panel.contains(&href), "the panel is missing {href}: {panel}");
-
-            let stale = format!("/services/{}", kind.slug());
-            assert!(!bar.contains(&stale), "the bar still uses {stale}: {bar}");
-            assert!(!panel.contains(&stale), "the panel still uses {stale}: {panel}");
+        for heading in ["Ateliers à domicile", "Autres Ateliers", "Moi et mon atelier"] {
+            assert!(panel.contains(heading), "the panel lost {heading}: {panel}");
         }
     }
 

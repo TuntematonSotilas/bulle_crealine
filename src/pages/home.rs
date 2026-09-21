@@ -66,17 +66,25 @@ fn UpcomingSessions(sessions: Vec<SessionView>) -> impl IntoView {
 #[cfg(all(test, feature = "ssr"))]
 mod tests {
     use super::*;
-    use crate::models::ServiceType;
 
-    /// One session per given kind, each carrying a date label of its own so the
-    /// cards can be told apart in the rendered markup.
-    fn sessions(kinds: &[ServiceType]) -> Vec<SessionView> {
-        kinds
+    /// Workshops the seed ships with, named here the way the server hands them
+    /// over: resolved onto the view, not derived from anything the page knows.
+    const APEROS: &str = "Apéros créatifs (adultes)";
+    const APRES_MIDIS: &str = "Ateliers après-midi créatifs (adultes)";
+    const PARENTS_ENFANTS: &str = "Ateliers parents-enfants (6 à 12 ans)";
+
+    /// One session per given workshop, each carrying a date label of its own so
+    /// the cards can be told apart in the rendered markup.
+    fn sessions(labels: &[&str]) -> Vec<SessionView> {
+        labels
             .iter()
             .enumerate()
-            .map(|(rank, kind)| SessionView {
+            .map(|(rank, label)| SessionView {
                 id: format!("651d1f0a00000000000000{rank:02}"),
-                service_type: *kind,
+                service_slug: format!("atelier-{rank}"),
+                service_label: (*label).to_owned(),
+                service_description: format!("Description de {label}."),
+                service_path: format!("/services/atelier-{rank}"),
                 date_label: format!("séance {rank}"),
                 date_input: "2026-07-05T14:00".to_owned(),
                 theme_id: "651d1f0a0000000000000099".to_owned(),
@@ -110,9 +118,9 @@ mod tests {
     #[test]
     fn draws_one_grid_of_every_kind() {
         let html = sections_html(sessions(&[
-            ServiceType::AperosCreatifs,
-            ServiceType::ApresMidisCreatifs,
-            ServiceType::AperosCreatifs,
+            APEROS,
+            APRES_MIDIS,
+            APEROS,
         ]));
 
         assert_eq!(html.matches("<section").count(), 1, "not one section: {html}");
@@ -129,9 +137,9 @@ mod tests {
     #[test]
     fn keeps_the_order_it_was_given() {
         let html = sections_html(sessions(&[
-            ServiceType::AperosCreatifs,
-            ServiceType::ApresMidisCreatifs,
-            ServiceType::ParentsEnfantsMoinsSix,
+            APEROS,
+            APRES_MIDIS,
+            PARENTS_ENFANTS,
         ]));
 
         let positions: Vec<_> = (0..3)
@@ -151,11 +159,11 @@ mod tests {
     /// workshop, so every kind on show has to be legible from the markup.
     #[test]
     fn every_card_still_names_its_workshop() {
-        let kinds = [ServiceType::AperosCreatifs, ServiceType::ParentsEnfantsSixADouze];
-        let html = sections_html(sessions(&kinds));
+        let labels = [APEROS, PARENTS_ENFANTS];
+        let html = sections_html(sessions(&labels));
 
-        for kind in kinds {
-            assert!(html.contains(kind.label()), "{kind:?} is not named: {html}");
+        for label in labels {
+            assert!(html.contains(label), "{label} is not named: {html}");
         }
     }
 }

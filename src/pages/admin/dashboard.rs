@@ -13,6 +13,22 @@ pub fn AdminPage() -> impl IntoView {
         <AdminShell title="Administration" current="/admin">
             <div class="grid gap-4 md:grid-cols-2">
 
+                // First, because everything else hangs off it: a séance picks a
+                // workshop, and the menu and the catalogue list them.
+                <Card>
+                    <CardHeader>
+                        <CardTitle>"Services"</CardTitle>
+                        <CardDescription>
+                            "Créer et modifier les services : description, déroulement et picto."
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <a href="/admin/services" class="text-sm underline underline-offset-4">
+                            "Gérer les services"
+                        </a>
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardHeader>
                         <CardTitle>"Séances"</CardTitle>

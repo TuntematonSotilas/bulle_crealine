@@ -162,9 +162,11 @@ pub async fn delete_theme(id: String) -> Result<(), ServerFnError> {
 /// The sessions a theme is used by, to spell out what changing it affects.
 #[server]
 pub async fn theme_sessions(id: String) -> Result<Vec<AffectedSession>, ServerFnError> {
+    use std::collections::HashMap;
+
     use crate::api::log_failure;
     use crate::auth::require_admin;
-    use crate::db::{datetime, session};
+    use crate::db::{datetime, service, session};
 
     require_admin()?;
 
@@ -174,11 +176,23 @@ pub async fn theme_sessions(id: String) -> Result<Vec<AffectedSession>, ServerFn
         .await
         .map_err(|error| log_failure("listing the sessions of a theme", error))?;
 
+    // Workshops are rows now, so naming one takes a lookup. One read for the lot,
+    // and the slug stands in for a workshop that has since been deleted.
+    let labels: HashMap<_, _> = service::list_all()
+        .await
+        .map_err(|error| log_failure("naming the workshops of a theme's sessions", error))?
+        .into_iter()
+        .map(|found| (found.slug, found.label))
+        .collect();
+
     Ok(sessions
-        .iter()
+        .into_iter()
         .map(|found| AffectedSession {
             date_label: datetime::to_label(found.date),
-            service_label: found.service_type.label().to_owned(),
+            service_label: labels
+                .get(&found.service_type)
+                .cloned()
+                .unwrap_or(found.service_type),
         })
         .collect())
 }

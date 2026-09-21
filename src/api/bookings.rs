@@ -66,7 +66,7 @@ pub async fn create_booking(
     let document = BookingDoc {
         id: None,
         session_id,
-        service_type: session.service_type,
+        service_type: session.service_type.clone(),
         name: request.name,
         email: request.email,
         phone_key: phone_key(&request.phone),
@@ -97,7 +97,7 @@ pub async fn all_bookings() -> Result<Vec<BookingView>, ServerFnError> {
 
     use crate::api::log_failure;
     use crate::auth::require_admin;
-    use crate::db::{booking, datetime, session, theme};
+    use crate::db::{booking, datetime, service, session, theme};
 
     require_admin()?;
 
@@ -128,6 +128,15 @@ pub async fn all_bookings() -> Result<Vec<BookingView>, ServerFnError> {
         .filter_map(|session| session.id.map(|id| (id, session)))
         .collect();
 
+    // A third hop, for the workshop names. Bookings store the slug, and workshops
+    // are rows now, so the label has to be looked up rather than derived.
+    let service_labels: HashMap<_, _> = service::list_all()
+        .await
+        .map_err(|error| log_failure("loading the workshops of the bookings", error))?
+        .into_iter()
+        .map(|found| (found.slug, found.label))
+        .collect();
+
     Ok(bookings
         .into_iter()
         .map(|booking| {
@@ -136,7 +145,13 @@ pub async fn all_bookings() -> Result<Vec<BookingView>, ServerFnError> {
             BookingView {
                 id: booking.id.map(|id| id.to_hex()).unwrap_or_default(),
                 session_id: booking.session_id.to_hex(),
-                service_type: booking.service_type,
+                // A booking outlives the workshop it was taken for, so it falls
+                // back to the slug: less pretty than a name, and still enough to
+                // tell two old bookings apart.
+                service_label: service_labels
+                    .get(&booking.service_type)
+                    .cloned()
+                    .unwrap_or(booking.service_type),
                 // A booking outlives the session it points at, so the label has to
                 // cope with that session being gone.
                 session_date_label: session

@@ -10,6 +10,7 @@
 
 pub mod booking;
 pub mod datetime;
+pub mod service;
 pub mod session;
 pub mod theme;
 
@@ -21,6 +22,7 @@ use mongodb::options::{IndexOptions, ServerApi, ServerApiVersion};
 use mongodb::{Client, Collection, Database, IndexModel, bson::doc};
 
 use crate::db::booking::BookingDoc;
+use crate::db::service::ServiceDoc;
 use crate::db::session::SessionDoc;
 use crate::db::theme::ThemeDoc;
 
@@ -35,6 +37,9 @@ const BOOKINGS: &str = "bookings";
 
 /// What the sessions are about: a name and a photo.
 const THEMES: &str = "themes";
+
+/// The kinds of workshop on offer, which the admin area edits.
+const SERVICES: &str = "services";
 
 /// Unique index over the live bookings of one session, keyed by phone number.
 const ACTIVE_BOOKING_INDEX: &str = "session_id_1_phone_key_1_active";
@@ -157,6 +162,11 @@ pub fn themes() -> Result<Collection<ThemeDoc>, DbError> {
     Ok(get().ok_or(DbError::NotConfigured)?.collection(THEMES))
 }
 
+/// The workshops collection, or [`DbError::NotConfigured`].
+pub fn services() -> Result<Collection<ServiceDoc>, DbError> {
+    Ok(get().ok_or(DbError::NotConfigured)?.collection(SERVICES))
+}
+
 /// Creates the indexes the queries rely on.
 ///
 /// Creating an index that already exists with the same shape is a no-op, so this
@@ -165,6 +175,25 @@ async fn ensure_indexes(database: &Database) -> Result<(), DbError> {
     let sessions: Collection<SessionDoc> = database.collection(SESSIONS);
     let bookings: Collection<BookingDoc> = database.collection(BOOKINGS);
     let themes: Collection<ThemeDoc> = database.collection(THEMES);
+    let services: Collection<ServiceDoc> = database.collection(SERVICES);
+
+    // The slug is a workshop's identity: it is what sessions and bookings store,
+    // and what resolves `/services/<slug>` and `/booking/<slug>`. Two workshops
+    // sharing one would make both unreachable, so let the index refuse rather than
+    // check-then-write.
+    services
+        .create_index(
+            IndexModel::builder()
+                .keys(doc! { "slug": 1 })
+                .options(IndexOptions::builder().unique(true).build())
+                .build(),
+        )
+        .await?;
+
+    // Workshops used to live in code. Seeded here so a database that predates the
+    // collection comes up with the seven the site already offered, under the very
+    // slugs its stored sessions and bookings point at. A no-op from then on.
+    crate::db::service::seed_if_empty(&services).await?;
 
     // Serves the public listing: sessions of one kind, upcoming first.
     sessions
