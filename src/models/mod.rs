@@ -11,7 +11,7 @@ pub mod theme;
 
 pub use booking::{
     BookingContact, BookingProblem, BookingRequest, BookingView, MAX_PERSONS_PER_BOOKING,
-    phone_key,
+    is_french_phone, phone_key,
 };
 pub use service::{
     SERVICE_ICONS, ServiceView, icon_label, is_valid_slug, section_prefix, section_title, slugify,

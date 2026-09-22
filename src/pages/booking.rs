@@ -215,6 +215,7 @@ fn BookingForm(service: ServiceView, sessions: Vec<SessionView>) -> impl IntoVie
                                         r#type=InputType::Tel
                                         id="phone"
                                         name="phone"
+                                        placeholder="06 12 34 56 78"
                                         autocomplete="tel"
                                         required=true
                                     />

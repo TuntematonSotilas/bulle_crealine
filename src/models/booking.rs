@@ -26,7 +26,8 @@ pub enum BookingProblem {
     /// Only ever raised for a non-empty address: giving none is allowed.
     MalformedEmail,
     MissingPhone,
-    /// Digits are what [`phone_key`] keeps, and a number without any of them
+    /// Raised by [`is_french_phone`]: the number does not carry the digits of a
+    /// French one. A number without any digit falls here too, and has to — it
     /// would key as the empty string and collide with every other such number.
     MalformedPhone,
     NoPersons,
@@ -41,7 +42,9 @@ impl BookingProblem {
             Self::MissingName => "Indiquez votre nom.",
             Self::MalformedEmail => "Cette adresse e-mail semble incorrecte.",
             Self::MissingPhone => "Indiquez votre numéro de téléphone.",
-            Self::MalformedPhone => "Ce numéro de téléphone semble incorrect.",
+            Self::MalformedPhone => {
+                "Indiquez un numéro de téléphone français à 10 chiffres (ex. 06 12 34 56 78)."
+            }
             Self::NoPersons => "Il faut au moins une personne.",
             Self::TooManyPersons => "Contactez-nous directement pour un groupe de cette taille.",
         }
@@ -82,7 +85,7 @@ impl BookingRequest {
         if self.phone.is_empty() {
             return Err(BookingProblem::MissingPhone);
         }
-        if phone_key(&self.phone).is_empty() {
+        if !is_french_phone(&self.phone) {
             return Err(BookingProblem::MalformedPhone);
         }
         if self.persons == 0 {
@@ -108,6 +111,38 @@ impl BookingRequest {
 pub fn phone_key(phone: &str) -> String {
     phone.chars().filter(char::is_ascii_digit).collect()
 }
+
+/// Whether a number carries the digits of a French one.
+///
+/// A length check on [`phone_key`], not a directory lookup: what it catches is
+/// the number typed one digit short, the one pasted with its last pair missing,
+/// and the free text left in the field. Spelling is none of its business —
+/// spaces, dots and dashes are stripped before counting.
+///
+/// Which length applies depends on how the country is written, so the prefix is
+/// read alongside it. Accepted: `06 12 34 56 78` nationally, `+33 6 12 34 56 78`
+/// and `0033 6 12 34 56 78` from abroad — ten digits, or nine behind a country
+/// code. The trunk zero is required in the first and absent from the others,
+/// which is how a French number is written.
+pub fn is_french_phone(phone: &str) -> bool {
+    let digits = phone_key(phone);
+
+    // Each arm leaves the same nine digits, whatever spelled the country.
+    let subscriber = match digits.len() {
+        NATIONAL_DIGITS => digits.strip_prefix('0'),
+        11 => digits.strip_prefix("33"),
+        13 => digits.strip_prefix("0033"),
+        _ => None,
+    };
+
+    // Those nine open on the digit numbering the plan's areas: 1 to 5 by region,
+    // 6 and 7 for mobiles, 8 for special rates, 9 for internet lines. Zero is not
+    // one of them, so this also catches the trunk zero typed twice.
+    subscriber.is_some_and(|rest| matches!(rest.chars().next(), Some('1'..='9')))
+}
+
+/// Digits in a French number written nationally, `0612345678`.
+const NATIONAL_DIGITS: usize = 10;
 
 /// Exactly one `@`, something on each side, and a dot in the domain.
 fn looks_like_an_email(candidate: &str) -> bool {
@@ -253,6 +288,60 @@ mod tests {
 
         assert_eq!(form.validate(), Err(BookingProblem::MalformedPhone));
         assert!(phone_key("à rappeler").is_empty());
+    }
+
+    /// How people actually write the number, on a form that takes free text.
+    #[test]
+    fn accepts_the_usual_spellings_of_a_french_number() {
+        for spelling in [
+            "0612345678",
+            "06 12 34 56 78",
+            "06.12.34.56.78",
+            "06-12-34-56-78",
+            " 06 12 34 56 78 ",
+            "+33 6 12 34 56 78",
+            "+33612345678",
+            "0033 6 12 34 56 78",
+            "0123456789",
+            "09 87 65 43 21",
+        ] {
+            assert!(is_french_phone(spelling), "{spelling:?} should be accepted");
+
+            let form = BookingRequest { phone: spelling.to_owned(), ..request() };
+            assert_eq!(form.normalized().validate(), Ok(()), "{spelling:?}");
+        }
+    }
+
+    /// The point of the check: a number one digit off reaches nobody, and nothing
+    /// downstream would ever notice.
+    #[test]
+    fn rejects_a_number_of_the_wrong_length() {
+        for wrong in [
+            "06 12 34 56",       // abandoned halfway
+            "061234567",         // one digit short
+            "06123456789",       // one digit too many
+            "12345678901",       // eleven digits, but no country code
+            "0033 6 12 34 56",   // short behind a country code
+            "06",
+        ] {
+            assert!(!is_french_phone(wrong), "{wrong:?} should be refused");
+
+            let form = BookingRequest { phone: wrong.to_owned(), ..request() };
+            assert_eq!(
+                form.normalized().validate(),
+                Err(BookingProblem::MalformedPhone),
+                "{wrong:?}"
+            );
+        }
+    }
+
+    /// Right length, impossible number: the trunk zero typed twice, and the
+    /// country code followed by the zero it replaces.
+    #[test]
+    fn rejects_a_number_of_the_right_length_opening_on_a_zero() {
+        for wrong in ["0012345678", "+33 0 12 34 56 78", "0033 0 12 34 56 78"] {
+            assert!(!is_french_phone(wrong), "{wrong:?} should be refused");
+        }
     }
 
     #[test]
