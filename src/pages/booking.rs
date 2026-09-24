@@ -2,11 +2,12 @@ use icons::Check;
 use leptos::either::{Either, EitherOf3};
 use leptos::prelude::*;
 use leptos_meta::Title;
-use leptos_router::hooks::use_params_map;
+use leptos_router::hooks::{use_params_map, use_query_map};
 
 use crate::api::bookings::CreateBooking;
 use crate::api::sessions::upcoming_offer;
 use crate::auth::user_message;
+use crate::components::blocks::studio_place::StudioPlace;
 use crate::components::ui::alert::{Alert, AlertDescription, AlertTitle, AlertVariant};
 use crate::components::ui::button::Button;
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
@@ -30,6 +31,10 @@ pub fn BookingPage() -> impl IntoView {
     // the previous list on screen.
     let offer = Resource::new(slug, |slug| async move { upcoming_offer(slug).await });
 
+    // `?session=<id>` is what a "Réserver" carries: the date was already chosen
+    // on the page it was clicked from, so the picker opens on it.
+    let chosen = use_query_map().get_untracked().get("session");
+
     view! {
         <Title text="Réserver un atelier — Bulle Créaline"/>
 
@@ -38,7 +43,12 @@ pub fn BookingPage() -> impl IntoView {
                 <p class="text-sm text-muted-foreground">"Chargement des séances…"</p>
             }
         }>
-            {move || Suspend::new(async move {
+            {move || {
+                // Cloned per run rather than moved: the closure re-runs, and an
+                // async block that swallowed the `String` could only run once.
+                let chosen = chosen.clone();
+
+                Suspend::new(async move {
                 match offer.await {
                     Err(error) => {
                         EitherOf3::A(
@@ -68,13 +78,15 @@ pub fn BookingPage() -> impl IntoView {
                                     <BookingForm
                                         service=offer.service
                                         sessions=offer.sessions
+                                        chosen=chosen
                                     />
                                 </div>
                             },
                         )
                     }
                 }
-            })}
+                })
+            }}
         </Transition>
     }
 }
@@ -97,8 +109,17 @@ fn UnknownService() -> impl IntoView {
 }
 
 /// The session picker and the visitor's details.
+///
+/// `chosen` is the id carried by `?session=`, which is how "Réserver" hands over
+/// the date that was clicked -- on the home page and on a workshop's own page
+/// alike. A date already picked is shown on its own rather than as one option
+/// among a list the visitor would have to read through again.
 #[component]
-fn BookingForm(service: ServiceView, sessions: Vec<SessionView>) -> impl IntoView {
+fn BookingForm(
+    service: ServiceView,
+    sessions: Vec<SessionView>,
+    chosen: Option<String>,
+) -> impl IntoView {
     let booking = ServerAction::<CreateBooking>::new();
     let pending = booking.pending();
     let result = booking.value();
@@ -128,45 +149,29 @@ fn BookingForm(service: ServiceView, sessions: Vec<SessionView>) -> impl IntoVie
         });
     }
 
-    let choices = sessions
-        .into_iter()
-        .enumerate()
-        .map(|(index, session)| {
-            let full = session.is_full();
-            let input_id = format!("session-{index}");
-            let label_for = input_id.clone();
+    // Only an id that names one of the dates on offer. A link outlives the date
+    // it carries -- deleted, or simply past -- and a stale one falls back to the
+    // list rather than to a form pointing at nothing.
+    let picked = RwSignal::new(
+        chosen.filter(|id| sessions.iter().any(|session| &session.id == id)),
+    );
 
-            view! {
-                <label
-                    r#for=label_for
-                    class="flex gap-3 items-start p-4 rounded-lg border transition-colors cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:disabled]:opacity-60 has-[:disabled]:cursor-not-allowed"
-                >
-                    <input
-                        type="radio"
-                        id=input_id
-                        name="session_id"
-                        value=session.id.clone()
-                        required=true
-                        disabled=full
-                        class="mt-1 accent-primary"
-                    />
-                    <span class="flex flex-col gap-1">
-                        <span class="font-medium">{session.date_label.clone()}</span>
-                        <span class="text-sm text-muted-foreground">
-                            "Thème : "{session.theme_name.clone()}" · "{session.price_label()}
-                        </span>
-                        <span class=move || {
-                            if full {
-                                "text-sm font-medium text-destructive"
-                            } else {
-                                "text-sm text-muted-foreground"
-                            }
-                        }>{session.availability_label()}</span>
-                    </span>
-                </label>
-            }
-        })
-        .collect::<Vec<_>>();
+    // Held rather than moved: the two arrangements are built on demand, and the
+    // visitor can go from one back to the other.
+    let sessions = StoredValue::new(sessions);
+
+    let choices = move || match picked.get() {
+        Some(id) => {
+            let session = sessions
+                .get_value()
+                .into_iter()
+                .find(|session| session.id == id)
+                .expect("filtered against the list above");
+
+            Either::Left(view! { <ChosenSession session=session picked=picked/> })
+        }
+        None => Either::Right(view! { <SessionChoices sessions=sessions.get_value()/> }),
+    };
 
     Either::Right(view! {
         {move || {
@@ -180,14 +185,29 @@ fn BookingForm(service: ServiceView, sessions: Vec<SessionView>) -> impl IntoVie
                 })
         }}
 
-        // Hidden rather than unmounted: the session list is built once from the
-        // loaded sessions, so it cannot be rebuilt from inside a reactive closure.
+        // Hidden rather than unmounted, so that what the visitor typed survives a
+        // refusal from the server and comes back filled in.
         <div class=move || if confirmed().is_some() { "hidden" } else { "" }>
             <Card>
                 <CardHeader>
-                    <CardTitle>"Choisissez votre séance"</CardTitle>
+                    <CardTitle>
+                        {move || {
+                            if picked.get().is_some() {
+                                "Votre séance"
+                            } else {
+                                "Choisissez votre séance"
+                            }
+                        }}
+                    </CardTitle>
                     <CardDescription>
                         {move || {
+                            // Counting what is open is an answer to "which one?",
+                            // a question already settled when a date was clicked.
+                            if picked.get().is_some() {
+                                return "Vérifiez la date, puis laissez-nous vos coordonnées."
+                                    .to_owned();
+                            }
+
                             match bookable {
                                 0 => "Toutes les séances à venir sont complètes.".to_owned(),
                                 1 => "Une séance est encore ouverte.".to_owned(),
@@ -201,7 +221,11 @@ fn BookingForm(service: ServiceView, sessions: Vec<SessionView>) -> impl IntoVie
                     <ActionForm action=booking>
                         <div class="flex flex-col gap-6">
 
-                            <div class="flex flex-col gap-3">{choices}</div>
+                            // Above the dates rather than below: the address holds
+                            // for every one of them, so it is read before picking.
+                            <StudioPlace/>
+
+                            {choices}
 
                             <div class="grid gap-4 md:grid-cols-2">
                                 <div class="grid gap-3">
@@ -279,6 +303,93 @@ fn BookingForm(service: ServiceView, sessions: Vec<SessionView>) -> impl IntoVie
     })
 }
 
+/// The one date the visitor already picked, and the way back to the others.
+///
+/// Its id travels in a hidden field: the form posts `session_id` either way, so
+/// the server sees the same thing whichever arrangement was shown.
+#[component]
+fn ChosenSession(session: SessionView, picked: RwSignal<Option<String>>) -> impl IntoView {
+    // All read before the view takes the fields apart.
+    let full = session.is_full();
+    let availability = session.availability_label();
+    let price = session.price_label();
+
+    let SessionView { id, date_label, theme_name, .. } = session;
+
+    view! {
+        <div class="flex flex-col gap-3">
+            <input type="hidden" name="session_id" value=id/>
+
+            <div class="flex flex-wrap gap-3 justify-between items-start p-4 rounded-lg border border-primary bg-primary/5">
+                <span class="flex flex-col gap-1">
+                    <span class="font-medium">{date_label}</span>
+                    <span class="text-sm text-muted-foreground">
+                        "Thème : "{theme_name}" · "{price}
+                    </span>
+                    <span class=if full {
+                        "text-sm font-medium text-destructive"
+                    } else {
+                        "text-sm text-muted-foreground"
+                    }>{availability}</span>
+                </span>
+
+                // `type="button"`, or it would submit the form it sits in.
+                <button
+                    type="button"
+                    class="text-sm font-medium underline-offset-4 text-primary hover:underline"
+                    on:click=move |_| picked.set(None)
+                >
+                    "Choisir une autre date"
+                </button>
+            </div>
+        </div>
+    }
+}
+
+/// Every date on offer, to pick from.
+#[component]
+fn SessionChoices(sessions: Vec<SessionView>) -> impl IntoView {
+    let choices = sessions
+        .into_iter()
+        .enumerate()
+        .map(|(index, session)| {
+            let full = session.is_full();
+            let input_id = format!("session-{index}");
+            let label_for = input_id.clone();
+
+            view! {
+                <label
+                    r#for=label_for
+                    class="flex gap-3 items-start p-4 rounded-lg border transition-colors cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:disabled]:opacity-60 has-[:disabled]:cursor-not-allowed"
+                >
+                    <input
+                        type="radio"
+                        id=input_id
+                        name="session_id"
+                        value=session.id.clone()
+                        required=true
+                        disabled=full
+                        class="mt-1 accent-primary"
+                    />
+                    <span class="flex flex-col gap-1">
+                        <span class="font-medium">{session.date_label.clone()}</span>
+                        <span class="text-sm text-muted-foreground">
+                            "Thème : "{session.theme_name.clone()}" · "{session.price_label()}
+                        </span>
+                        <span class=if full {
+                            "text-sm font-medium text-destructive"
+                        } else {
+                            "text-sm text-muted-foreground"
+                        }>{session.availability_label()}</span>
+                    </span>
+                </label>
+            }
+        })
+        .collect::<Vec<_>>();
+
+    view! { <div class="flex flex-col gap-3">{choices}</div> }
+}
+
 /// Replaces the form once the booking is recorded.
 #[component]
 fn BookingConfirmed(service: ServiceView, session_label: String) -> impl IntoView {
@@ -312,6 +423,10 @@ fn BookingConfirmed(service: ServiceView, session_label: String) -> impl IntoVie
                             <dd class="font-medium">{session_label}</dd>
                         </div>
                     </dl>
+
+                    // Repeated here because this screen replaces the form: without
+                    // it the address would vanish at the very moment it is needed.
+                    <StudioPlace/>
 
                     <p class="text-sm text-muted-foreground">
                         "Vous recevrez une confirmation par e-mail. En cas d'empêchement, "
@@ -373,7 +488,8 @@ mod tests {
 
     fn form_html() -> String {
         Owner::new().with(|| {
-            view! { <BookingForm service=service() sessions=vec![session()]/> }.to_html()
+            view! { <BookingForm service=service() sessions=vec![session()] chosen=None/> }
+                .to_html()
         })
     }
 
@@ -401,6 +517,100 @@ mod tests {
         assert!(!email.contains("required"), "the email should be optional: {email}");
     }
 
+    fn form_with(chosen: Option<&str>) -> String {
+        let chosen = chosen.map(str::to_owned);
+        let dates = vec![session(), SessionView {
+            id: "651d1f0a0000000000000009".to_owned(),
+            date_label: "dimanche 12 juillet 2026 à 14h00".to_owned(),
+            ..session()
+        }];
+
+        Owner::new().with(|| {
+            view! { <BookingForm service=service() sessions=dates chosen=chosen/> }.to_html()
+        })
+    }
+
+    /// A date clicked on the home page, or on the workshop's own page, is not a
+    /// question to be asked again: the picker opens on it and leaves the others
+    /// out.
+    #[test]
+    fn a_chosen_date_is_shown_alone_and_posted_as_it_stands() {
+        let html = form_with(Some("651d1f0a0000000000000001"));
+
+        assert!(html.contains("dimanche 5 juillet 2026 à 14h00"), "no date: {html}");
+        assert!(
+            !html.contains("dimanche 12 juillet 2026 à 14h00"),
+            "the other dates should be out of the way: {html}"
+        );
+        // The server reads one field either way, so the id still has to be posted.
+        assert!(
+            html.contains(r#"type="hidden" name="session_id" value="651d1f0a0000000000000001""#),
+            "the chosen date is not posted: {html}"
+        );
+        assert!(!html.contains(r#"type="radio""#), "the list is still there: {html}");
+        assert!(html.contains("Choisir une autre date"), "no way back: {html}");
+    }
+
+    /// A link outlives the date it carries. An id nobody recognises has to leave
+    /// the visitor picking from the list rather than facing an empty form.
+    #[test]
+    fn an_unknown_date_leaves_the_whole_list_to_pick_from() {
+        let html = form_with(Some("651d1f0a0000000000000404"));
+
+        assert!(html.contains(r#"type="radio""#), "no list: {html}");
+        assert!(html.contains("dimanche 5 juillet 2026 à 14h00"), "no date: {html}");
+        assert!(html.contains("dimanche 12 juillet 2026 à 14h00"), "no date: {html}");
+        assert!(!html.contains("Choisir une autre date"), "{html}");
+    }
+
+    #[test]
+    fn without_a_chosen_date_every_date_is_offered() {
+        let html = form_with(None);
+
+        assert!(html.contains("Choisissez votre séance"), "{html}");
+        assert!(html.contains(r#"type="radio""#), "no list: {html}");
+        assert!(!html.contains(r#"name="session_id" type="hidden""#), "{html}");
+    }
+
+    /// Where to turn up is part of choosing a date, not an afterthought.
+    #[test]
+    fn the_form_says_where_the_session_is_held() {
+        use crate::models::{STUDIO_ADDRESS, STUDIO_MAP_URL};
+
+        let html = form_html();
+
+        assert!(html.contains(STUDIO_ADDRESS), "no address: {html}");
+        assert!(html.contains(STUDIO_MAP_URL), "no map link: {html}");
+    }
+
+    /// This screen replaces the form outright, so an address shown only on the
+    /// form disappears exactly when the visitor starts needing it.
+    #[test]
+    fn the_confirmation_repeats_where_to_go() {
+        use crate::models::STUDIO_ADDRESS;
+        use leptos_router::components::Router;
+        use leptos_router::location::RequestUrl;
+
+        let html = Owner::new().with(|| {
+            // It carries a link back to the workshop, and a link resolves
+            // `aria-current` against the location being rendered.
+            provide_context(RequestUrl::new("/booking/aperos-creatifs"));
+
+            view! {
+                <Router>
+                    <BookingConfirmed
+                        service=service()
+                        session_label="dimanche 5 juillet 2026 à 14h00".to_owned()
+                    />
+                </Router>
+            }
+            .to_html()
+        });
+
+        assert!(html.contains("Votre réservation est enregistrée"), "{html}");
+        assert!(html.contains(STUDIO_ADDRESS), "no address: {html}");
+    }
+
     /// A field that no longer refuses to submit has to say so, or it still reads
     /// as mandatory.
     #[test]
@@ -415,7 +625,9 @@ mod tests {
     #[test]
     fn a_workshop_with_no_date_points_back_at_its_page() {
         let html = Owner::new()
-            .with(|| view! { <BookingForm service=service() sessions=vec![]/> }.to_html());
+            .with(|| {
+                view! { <BookingForm service=service() sessions=vec![] chosen=None/> }.to_html()
+            });
 
         assert!(html.contains("Aucune séance programmée"), "{html}");
         assert!(html.contains(r#"href="/services/aperos-creatifs""#), "{html}");

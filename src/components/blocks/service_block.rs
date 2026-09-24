@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::components::ui::button::Button;
+use crate::components::blocks::studio_place::StudioPlace;
 use crate::components::ui::service_icon::ServiceIcon;
 use crate::models::ServiceView;
 
@@ -11,17 +11,9 @@ use crate::models::ServiceView;
 /// on which workshop it is.
 #[component]
 pub fn ServiceBlock(service: ServiceView) -> impl IntoView {
-    // A workshop run for a structure takes no online booking, so `booking_path`
-    // answers `None` and the button is simply absent.
-    let register_button = service.booking_path().map(|path| {
-        view! {
-            <div class="mb-6">
-                <Button class="w-full md:w-auto" href=path>
-                    "S'inscrire"
-                </Button>
-            </div>
-        }
-    });
+    // A workshop run for a structure agrees on its dates directly, so it has no
+    // booking page -- and is not held at the studio either.
+    let bookable = service.booking_path().is_some();
 
     // Left out rather than shown empty: a workshop open to everyone has no age to
     // announce, and an empty card would read as missing information.
@@ -34,6 +26,17 @@ pub fn ServiceBlock(service: ServiceView) -> impl IntoView {
                     </div>
                     <div class="mt-1 font-medium">{service.age.clone()}</div>
                 </div>
+            </div>
+        }
+    });
+
+    // Only where the visitor is the one who travels. A workshop run for a
+    // structure is held at the structure's address, so announcing the studio's
+    // would not merely be unhelpful -- it would be wrong.
+    let place = bookable.then(|| {
+        view! {
+            <div class="mb-6">
+                <StudioPlace/>
             </div>
         }
     });
@@ -90,7 +93,7 @@ pub fn ServiceBlock(service: ServiceView) -> impl IntoView {
                         </p>
                     </div>
 
-                    {register_button} {age} {steps}
+                    {age} {place} {steps}
 
                 </div>
             </div>
@@ -143,20 +146,38 @@ mod tests {
         assert!(html.contains("À partir de 18 ans"), "no age: {html}");
         assert!(html.contains("Déroulement de l'atelier"), "no run-through: {html}");
         assert!(html.contains("Réalisation du projet"), "no step: {html}");
-        assert!(html.contains("<svg"), "no picto: {html}");
+        // Named rather than counted as "an svg": the studio address draws one too,
+        // and a bare `<svg` check would pass on it.
+        assert!(html.contains(r#"data-name="Wine""#), "no picto: {html}");
     }
 
-    /// A workshop run for a structure agrees on its dates directly: a booking
-    /// button would lead to a page with nothing to pick.
+    /// Booking left this block for the schedule below it, where each date carries
+    /// its own button. A single "S'inscrire" here only led to a page listing the
+    /// same dates again, one step further away.
     #[test]
-    fn only_a_bookable_workshop_offers_to_sign_up() {
+    fn the_presentation_offers_no_booking_of_its_own() {
+        for pro in [false, true] {
+            let html = block_html(service(pro));
+
+            assert!(!html.contains("/booking/"), "booking belongs below: {html}");
+            assert!(!html.contains("S'inscrire"), "the button should be gone: {html}");
+        }
+    }
+
+    /// The studio address belongs to the workshops a visitor travels to. One run
+    /// for a structure is held at the structure's, so showing this one would be a
+    /// wrong answer rather than a missing one.
+    #[test]
+    fn only_a_bookable_workshop_announces_the_studio() {
+        use crate::models::STUDIO_ADDRESS;
+
         assert!(
-            block_html(service(false)).contains("/booking/aperos-creatifs"),
-            "the booking link should show"
+            block_html(service(false)).contains(STUDIO_ADDRESS),
+            "the address should show on a bookable workshop"
         );
         assert!(
-            !block_html(service(true)).contains("/booking/"),
-            "a workshop for structures should offer none"
+            !block_html(service(true)).contains(STUDIO_ADDRESS),
+            "a workshop for structures is not held there"
         );
     }
 
@@ -177,7 +198,10 @@ mod tests {
             !html.contains("Déroulement de l'atelier"),
             "an empty run-through should not show: {html}"
         );
-        assert!(!html.contains("<svg"), "an empty picto should draw nothing: {html}");
+        assert!(
+            !html.contains(r#"data-name="Wine""#),
+            "an empty picto should draw nothing: {html}"
+        );
         assert!(html.contains("Apéros créatifs (adultes)"), "the name still shows: {html}");
     }
 }

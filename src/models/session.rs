@@ -64,6 +64,45 @@ pub struct BookingOffer {
     pub sessions: Vec<SessionView>,
 }
 
+/// One theme, with the upcoming sessions filed under it.
+///
+/// Built from the sessions rather than fetched: a session already carries its
+/// theme's name and photo, so a workshop page can show what is on offer without
+/// a second round trip -- and without a public themes endpoint, which does not
+/// exist.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ThemeSessions {
+    pub theme_id: String,
+    pub theme_name: String,
+    /// Empty when the theme has been deleted, exactly as on a session.
+    pub photo_url: String,
+    /// In the order they were given, which is soonest first.
+    pub sessions: Vec<SessionView>,
+}
+
+/// Gathers sessions under their theme, keeping the order they arrived in.
+///
+/// A theme takes the rank of its soonest session, since the list is already
+/// sorted by date: what a visitor sees first is what is happening first, rather
+/// than an alphabet or an id.
+pub fn group_by_theme(sessions: Vec<SessionView>) -> Vec<ThemeSessions> {
+    let mut groups: Vec<ThemeSessions> = Vec::new();
+
+    for session in sessions {
+        match groups.iter_mut().find(|group| group.theme_id == session.theme_id) {
+            Some(group) => group.sessions.push(session),
+            None => groups.push(ThemeSessions {
+                theme_id: session.theme_id.clone(),
+                theme_name: session.theme_name.clone(),
+                photo_url: session.photo_url.clone(),
+                sessions: vec![session],
+            }),
+        }
+    }
+
+    groups
+}
+
 impl SessionView {
     /// How many people can still be booked.
     pub fn remaining_places(&self) -> u32 {
@@ -155,5 +194,50 @@ mod tests {
 
         view.price = 62.5;
         assert_eq!(view.price_label(), "62.50 €");
+    }
+
+    /// One session under the named theme, with an id of its own so a group's
+    /// contents can be told apart.
+    fn dated(id: &str, theme_id: &str, theme_name: &str) -> SessionView {
+        SessionView {
+            id: id.to_owned(),
+            theme_id: theme_id.to_owned(),
+            theme_name: theme_name.to_owned(),
+            ..session(8, 0)
+        }
+    }
+
+    #[test]
+    fn gathers_the_sessions_of_one_theme_under_one_group() {
+        let groups = group_by_theme(vec![
+            dated("a", "theme-1", "Aquarelle"),
+            dated("b", "theme-1", "Aquarelle"),
+        ]);
+
+        assert_eq!(groups.len(), 1, "one theme should give one group: {groups:?}");
+        assert_eq!(groups[0].theme_name, "Aquarelle");
+        assert_eq!(groups[0].sessions.len(), 2, "both dates should be kept");
+    }
+
+    /// The list arrives sorted by date, so a theme takes the rank of its soonest
+    /// session: what shows first is what happens first.
+    #[test]
+    fn a_theme_ranks_by_its_soonest_session() {
+        let groups = group_by_theme(vec![
+            dated("a", "theme-2", "Collage"),
+            dated("b", "theme-1", "Aquarelle"),
+            dated("c", "theme-2", "Collage"),
+        ]);
+
+        let order: Vec<&str> = groups.iter().map(|group| group.theme_name.as_str()).collect();
+
+        assert_eq!(order, vec!["Collage", "Aquarelle"], "not the order they came in");
+    }
+
+    /// A workshop with nothing scheduled must give nothing to show, rather than
+    /// an empty group standing under a heading.
+    #[test]
+    fn no_session_gives_no_group() {
+        assert!(group_by_theme(Vec::new()).is_empty());
     }
 }

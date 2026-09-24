@@ -14,7 +14,8 @@ pub use booking::{
     is_french_phone, phone_key,
 };
 pub use service::{
-    SERVICE_ICONS, ServiceView, icon_label, is_valid_slug, section_prefix, section_title, slugify,
+    SERVICE_ICONS, STUDIO_ADDRESS, STUDIO_MAP_URL, ServiceView, icon_label, is_valid_slug,
+    section_prefix, section_title, slugify,
 };
-pub use session::{BookingOffer, HOME_SESSIONS, SessionView};
+pub use session::{BookingOffer, HOME_SESSIONS, SessionView, ThemeSessions, group_by_theme};
 pub use theme::{AffectedSession, MAX_PHOTO_BYTES, MAX_PHOTO_LABEL, ThemeView};

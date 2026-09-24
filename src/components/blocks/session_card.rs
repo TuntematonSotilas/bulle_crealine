@@ -19,6 +19,7 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
     let availability = session.availability_label();
 
     let SessionView {
+        id,
         service_slug,
         service_label,
         service_description,
@@ -28,6 +29,15 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
         photo_url,
         ..
     } = session;
+
+    // The workshop page opens on this very date rather than on its theme grid.
+    // Not carried when the workshop is gone: `service_path` is then "/", where
+    // the parameter would name nothing.
+    let more_path = if service_path == "/" {
+        service_path
+    } else {
+        format!("{service_path}?session={id}")
+    };
 
     let photo = if photo_url.is_empty() {
         // Only reachable when the themes collection was edited by hand, since
@@ -61,7 +71,9 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
         })
     } else {
         Either::Right(view! {
-            <Button size=ButtonSize::Sm href=format!("/booking/{service_slug}")>
+            // The date travels with the link, so the booking page opens on it
+            // rather than asking the visitor to pick it a second time.
+            <Button size=ButtonSize::Sm href=format!("/booking/{service_slug}?session={id}")>
                 "Réserver"
             </Button>
         })
@@ -113,7 +125,7 @@ pub fn SessionCard(session: SessionView) -> impl IntoView {
                 <div class="flex gap-3 justify-between items-center pt-1 mt-auto">
                     {action}
                     <a
-                        href=service_path
+                        href=more_path
                         class="inline-flex gap-1 items-center text-sm font-medium underline-offset-4 text-primary hover:underline"
                     >
                         "voir +"
@@ -171,6 +183,38 @@ mod tests {
         })
     }
 
+    /// "voir +" leads to the workshop's page, and says which date was clicked so
+    /// that page can open on it rather than on its grid of themes.
+    #[test]
+    fn the_more_link_carries_the_session_it_was_clicked_from() {
+        let html = card_html(session(5));
+
+        assert!(
+            html.contains(r#"href="/services/aperos-creatifs?session=651d1f0a0000000000000001""#),
+            "{html}"
+        );
+    }
+
+    /// A deleted workshop leaves its sessions pointing at the home page, where the
+    /// parameter would name nothing.
+    #[test]
+    fn a_session_whose_workshop_is_gone_carries_no_parameter() {
+        let orphan = SessionView { service_path: "/".to_owned(), ..session(5) };
+
+        let html = card_html(orphan);
+
+        // Bounded to the "voir +" anchor: the booking button beside it carries
+        // the parameter legitimately, and a check over the whole card would read
+        // that one instead.
+        let more = html
+            .split("<a ")
+            .find(|fragment| fragment.contains("voir +"))
+            .expect(r#"the "voir +" link should render"#);
+
+        assert!(more.contains(r#"href="/""#), "no link home: {more}");
+        assert!(!more.contains("?session="), "a stray parameter: {more}");
+    }
+
     /// The card is the whole advertisement for a date: photo, what the workshop
     /// is, when it is, what it is about, what is left, and the two ways on.
     #[test]
@@ -186,7 +230,10 @@ mod tests {
         assert!(html.contains("dimanche 5 juillet 2026 à 14h00"), "no date: {html}");
         assert!(html.contains("Aquarelle"), "no theme: {html}");
         assert!(html.contains("3 places restantes"), "no remaining places: {html}");
-        assert!(html.contains("/booking/aperos-creatifs"), "no booking link: {html}");
+        assert!(
+            html.contains("/booking/aperos-creatifs?session=651d1f0a0000000000000001"),
+            "the booking link should carry the date: {html}"
+        );
         assert!(html.contains("voir +"), "no \"voir +\" link: {html}");
         assert!(
             html.contains("/services/aperos-creatifs"),

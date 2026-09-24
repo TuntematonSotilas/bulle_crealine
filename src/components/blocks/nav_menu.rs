@@ -38,6 +38,29 @@ fn section(services: &[ServiceView], pro: bool) -> Vec<ServiceView> {
         .collect()
 }
 
+/// The bubble mark, as every home link carries it.
+///
+/// Decorative on purpose: [`HomeWord`] stands beside it and names the link in
+/// visible text, so an `alt` repeating "Accueil" would have the destination read
+/// out twice.
+#[component]
+fn HomeLogo() -> impl IntoView {
+    view! { <img src="/assets/icon.svg" alt="" aria-hidden="true" class="w-16 h-16"/> }
+}
+
+/// The word naming the home link, shown at all times rather than on hover.
+///
+/// The mark is a bubble with no lettering in it, so without this word nothing
+/// tells a visitor where it leads unless they happen to point at it.
+///
+/// It takes `text-foreground` rather than the `text-foreground/70` the bar's links
+/// inherit: this word alone names the link, and does not settle for the 70% its
+/// neighbours can afford.
+#[component]
+fn HomeWord(#[prop(into, optional)] class: String) -> impl IntoView {
+    view! { <span class=format!("font-medium text-foreground {class}")>"Accueil"</span> }
+}
+
 /// Small wave set between the mobile menu's top-level sections.
 ///
 /// Kept at icon size and centred rather than stretched across the panel, so the
@@ -71,25 +94,15 @@ fn DesktopNav(services: Services) -> impl IntoView {
             <NavigationMenu>
                 <NavigationMenuList>
                     <NavigationMenuItem>
-                        // The group is named: `NavigationMenuList` already carries a
-                        // plain `group`, and an unnamed `group-hover:` below would
-                        // fire from a hover anywhere in the bar.
+                        // `flex` rather than the base `inline-flex`: an inline box
+                        // takes its baseline from the image's bottom edge, which
+                        // grows the row unevenly and knocks the logo off centre.
                         <NavigationMenuLink
                             href="/"
-                            class="group/logo relative flex justify-center items-center px-2 h-16 rounded-md transition-colors hover:bg-accent"
+                            class="flex gap-2 items-center px-3 h-16 rounded-md transition-colors hover:bg-accent"
                         >
-                            // "Accueil" rather than "Logo": the alt text is what
-                            // names this link, and the label the hover reveals.
-                            <img src="/assets/icon.svg" alt="Accueil" class="w-16 h-16"/>
-                            // Hidden from assistive tech, which already reads the
-                            // link's name, and shown on keyboard focus as well as
-                            // hover so it is not mouse-only.
-                            <span
-                                aria-hidden="true"
-                                class="absolute top-full left-1/2 z-20 px-2 py-1 -translate-x-1/2 text-xs font-medium whitespace-nowrap rounded-md border shadow-md transition-opacity opacity-0 pointer-events-none border-border bg-popover text-popover-foreground group-hover/logo:opacity-100 group-focus-visible/logo:opacity-100"
-                            >
-                                "Accueil"
-                            </span>
+                            <HomeLogo/>
+                            <HomeWord class="text-sm"/>
                         </NavigationMenuLink>
                     </NavigationMenuItem>
 
@@ -223,8 +236,10 @@ fn MobileNav(services: Services) -> impl IntoView {
         <style>"body:has([data-mobile-nav='open']) { overflow: hidden; }"</style>
 
         <div class="flex justify-between items-center px-4 py-4 md:hidden">
-            <a href="/" aria-label="Accueil">
-                <img src="/assets/icon.svg" alt="Bulle Créaline" class="w-16 h-16"/>
+            // No `aria-label`: it would override the visible word it duplicates.
+            <a href="/" class="flex gap-2 items-center rounded-md">
+                <HomeLogo/>
+                <HomeWord/>
             </a>
 
             <div class="flex gap-1 items-center">
@@ -253,8 +268,9 @@ fn MobileNav(services: Services) -> impl IntoView {
             }
         >
             <div class="flex justify-between items-center px-4 py-4 border-b">
-                <a href="/" aria-label="Accueil" on:click=close>
-                    <img src="/assets/icon.svg" alt="Bulle Créaline" class="w-16 h-16"/>
+                <a href="/" class="flex gap-2 items-center rounded-md" on:click=close>
+                    <HomeLogo/>
+                    <HomeWord/>
                 </a>
                 <button
                     type="button"
@@ -496,49 +512,54 @@ mod tests {
             .expect("the logo link should render")
     }
 
-    /// The label has to be scoped to the logo: `NavigationMenuList` carries a
-    /// plain `group`, so an unnamed `group-hover:` would reveal it from a hover
-    /// anywhere in the bar.
+    /// The mark is a bubble with no lettering in it, so the word beside it is the
+    /// only thing that says where the link leads. A label revealed on hover left
+    /// out everyone not holding a pointer.
     #[test]
-    fn the_home_label_answers_to_the_logo_alone() {
+    fn the_home_link_names_itself_in_visible_text() {
         let logo = logo_link();
 
-        assert!(logo.contains("group/logo"), "the group should be named: {logo}");
+        assert!(logo.contains(">Accueil<"), "the word should render: {logo}");
         assert!(
-            logo.contains("group-hover/logo:opacity-100"),
-            "and the label should key off that name: {logo}"
-        );
-        assert!(
-            !logo.contains("group-hover:opacity-100"),
-            "an unnamed group-hover would fire from the whole bar: {logo}"
+            !logo.contains("opacity-0"),
+            "and stay visible rather than wait for a hover: {logo}"
         );
     }
 
-    /// Hidden until hovered, reachable without a mouse, and silent to assistive
-    /// tech, which already reads the link's own name.
-    #[test]
-    fn the_home_label_starts_hidden_and_answers_to_the_keyboard() {
-        let logo = logo_link();
-
-        assert!(logo.contains("Accueil"), "the label should render: {logo}");
-        assert!(logo.contains("opacity-0"), "and start hidden: {logo}");
-        assert!(
-            logo.contains("group-focus-visible/logo:opacity-100"),
-            "a hover-only label would be unreachable by keyboard: {logo}"
-        );
-        assert!(
-            logo.contains("aria-hidden"),
-            "the label duplicates the link name, so it should not be announced: {logo}"
-        );
+    /// Every home link across the two menus, bounded by its closing tag so an
+    /// assertion cannot pass on markup belonging to a later link.
+    fn home_links(html: &str) -> Vec<String> {
+        html.split("<a ")
+            .filter(|fragment| fragment.contains("/assets/icon.svg"))
+            .filter_map(|fragment| {
+                fragment.split_once("</a>").map(|(inside, _)| inside.to_owned())
+            })
+            .collect()
     }
 
-    /// The link points at the home page, so its accessible name has to say so;
-    /// "Logo" described the image rather than the destination.
+    /// The bar, and the two the mobile side carries: its closed header and the
+    /// open panel's. Gathered rather than counted over the page, which a later
+    /// mention of the word anywhere else would throw off.
     #[test]
-    fn the_logo_image_names_its_destination() {
-        let logo = logo_link();
+    fn every_home_link_names_itself_and_leaves_the_mark_silent() {
+        let links = [(desktop_nav(), 1), (mobile_nav(), 2)];
 
-        assert!(logo.contains(r#"alt="Accueil""#), "{logo}");
+        for (html, expected) in links {
+            let found = home_links(&html);
+            assert_eq!(found.len(), expected, "wrong number of home links: {html}");
+
+            for link in found {
+                assert!(link.contains(">Accueil<"), "unnamed home link: {link}");
+                assert!(
+                    link.contains(r#"alt="""#),
+                    "the mark should be decorative beside the word: {link}"
+                );
+                assert!(
+                    !link.contains(r#"aria-label="#),
+                    "an aria-label would override the visible word: {link}"
+                );
+            }
+        }
     }
 
     /// A page reachable from one menu only is invisible to half the visitors, so
