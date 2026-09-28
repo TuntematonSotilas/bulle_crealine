@@ -42,7 +42,7 @@ pub fn AdminLoginPage() -> impl IntoView {
     };
 
     view! {
-        <Title text="Connexion — Bulle Créaline"/>
+        <Title text="Connexion — Bulle Créaline (E.I)"/>
 
         <div class="flex justify-center items-center py-10 w-full">
             <div class="w-full max-w-sm">

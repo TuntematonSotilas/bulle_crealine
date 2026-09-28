@@ -26,7 +26,7 @@ pub fn NotFound() -> impl IntoView {
     }
 
     view! {
-        <Title text="Bientôt disponible — Bulle Créaline"/>
+        <Title text="Bientôt disponible — Bulle Créaline (E.I)"/>
 
         <div class="flex flex-col gap-4 items-center py-16 mx-auto max-w-2xl text-center">
             <h1 class="text-4xl font-semibold tracking-tight text-heading">

@@ -8,7 +8,7 @@ use crate::pages::admin::AdminShell;
 #[component]
 pub fn AdminPage() -> impl IntoView {
     view! {
-        <Title text="Administration — Bulle Créaline"/>
+        <Title text="Administration — Bulle Créaline (E.I)"/>
 
         <AdminShell title="Administration" current="/admin">
             <div class="grid gap-4 md:grid-cols-2">

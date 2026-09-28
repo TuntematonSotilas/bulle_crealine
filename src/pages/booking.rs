@@ -36,7 +36,7 @@ pub fn BookingPage() -> impl IntoView {
     let chosen = use_query_map().get_untracked().get("session");
 
     view! {
-        <Title text="Réserver un atelier — Bulle Créaline"/>
+        <Title text="Réserver un atelier — Bulle Créaline (E.I)"/>
 
         <Transition fallback=|| {
             view! {

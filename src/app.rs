@@ -24,13 +24,13 @@ pub fn App() -> impl IntoView {
         <Stylesheet id="leptos" href="/pkg/bulle_crealine.css"/>
 
         // sets the document title
-        <Title text="Bulle Créaline"/>
+        <Title text="Bulle Créaline (E.I)"/>
 
-        <Meta property="og:title" content="Bulle Créaline" />
+        <Meta property="og:title" content="Bulle Créaline (E.I)" />
         <Meta property="og:url" content="https://bulle-crealine.onrender.com" />
         <Meta property="og:image" content="https://bulle-crealine.onrender.com/assets/meta.png" />
-        <Meta property="og:description" content="Médiation artistique en relation d'aide." />
-        <Meta property="og:site_name" content="Bulle Créaline" />
+        <Meta property="og:description" content="Ateliers créatifs à Feurs" />
+        <Meta property="og:site_name" content="Bulle Créaline (E.I)" />
         <Meta property="og:type" content="website" />
 
         // content for this welcome page

@@ -66,7 +66,7 @@ pub fn section_title(pro: bool) -> &'static str {
 /// A constant rather than a field: every bookable workshop runs at this one
 /// address, and a workshop run for a structure takes place at the structure's, so
 /// there is nothing to choose per row. A second venue would make it a field.
-pub const STUDIO_ADDRESS: &str = "Bulle Créaline, 5 Rue Marc Seguin, 42110 Feurs";
+pub const STUDIO_ADDRESS: &str = "Bulle Créaline (E.I), 5 Rue Marc Seguin, 42110 Feurs";
 
 /// The same address on a map, for whoever would rather be guided than read.
 pub const STUDIO_MAP_URL: &str = "https://maps.app.goo.gl/Fgmpg9RF8HiPGrkf7";
@@ -93,69 +93,34 @@ pub fn is_valid_slug(candidate: &str) -> bool {
 pub fn slugify(label: &str) -> String {
     let mut slug = String::with_capacity(label.len());
 
-    for character in label.chars() {
-        match fold(character) {
-            // One hyphen per run of anything unusable, and never a leading one.
-            "" => {
-                if !slug.is_empty() && !slug.ends_with('-') {
-                    slug.push('-');
-                }
-            }
-            folded => slug.push_str(folded),
+    // `to_lowercase` rather than `to_ascii_lowercase`, which leaves 'À' and 'Œ'
+    // untouched: they would then fall through as unusable, and every accented
+    // capital would vanish from the slug.
+    for character in label.chars().flat_map(char::to_lowercase) {
+        match character {
+            'a'..='z' | '0'..='9' => slug.push(character),
+            _ => match ascii_for(character) {
+                Some(ascii) => slug.push_str(ascii),
+                // One hyphen per run of anything unusable, never a leading one.
+                None if !slug.is_empty() && !slug.ends_with('-') => slug.push('-'),
+                None => {}
+            },
         }
     }
 
     slug.trim_end_matches('-').to_owned()
 }
 
-/// The ASCII a character contributes to a slug, or `""` when it contributes none.
+/// The ASCII a French diacritic or ligature stands for, if any.
 ///
-/// The accented letters are spelled out rather than computed: stripping diacritics
-/// properly would mean pulling in Unicode normalization for the handful of letters
-/// French actually uses.
+/// Spelled out rather than computed: Unicode normalization would decompose the
+/// accented letters, but not `œ` or `æ`, so a table would be needed either way --
+/// and this one is twelve lines rather than a transliteration crate shipped in
+/// the WASM bundle for the eighteen characters French actually uses.
 ///
-/// Lowercased through `char::to_lowercase` rather than `to_ascii_lowercase`, which
-/// leaves `'À'` and `'Œ'` untouched and would drop every accented capital.
-fn fold(character: char) -> &'static str {
-    let lowered = character.to_lowercase().next().unwrap_or(character);
-
-    match lowered {
-        'a' => "a",
-        'b' => "b",
-        'c' => "c",
-        'd' => "d",
-        'e' => "e",
-        'f' => "f",
-        'g' => "g",
-        'h' => "h",
-        'i' => "i",
-        'j' => "j",
-        'k' => "k",
-        'l' => "l",
-        'm' => "m",
-        'n' => "n",
-        'o' => "o",
-        'p' => "p",
-        'q' => "q",
-        'r' => "r",
-        's' => "s",
-        't' => "t",
-        'u' => "u",
-        'v' => "v",
-        'w' => "w",
-        'x' => "x",
-        'y' => "y",
-        'z' => "z",
-        '0' => "0",
-        '1' => "1",
-        '2' => "2",
-        '3' => "3",
-        '4' => "4",
-        '5' => "5",
-        '6' => "6",
-        '7' => "7",
-        '8' => "8",
-        '9' => "9",
+/// Plain letters and digits never reach here: [`slugify`] keeps them by range.
+fn ascii_for(character: char) -> Option<&'static str> {
+    Some(match character {
         'à' | 'â' | 'ä' => "a",
         'ç' => "c",
         'é' | 'è' | 'ê' | 'ë' => "e",
@@ -165,8 +130,8 @@ fn fold(character: char) -> &'static str {
         'ÿ' => "y",
         'œ' => "oe",
         'æ' => "ae",
-        _ => "",
-    }
+        _ => return None,
+    })
 }
 
 /// The icons the admin can pick from, as `(name, what it looks like)`.
@@ -300,6 +265,9 @@ mod tests {
             // would then fall through as unusable and vanish from the slug.
             ("Œuvre collective", "oeuvre-collective"),
             ("ÉVEIL À L'ART", "eveil-a-l-art"),
+            // Already a slug: the range that keeps plain letters and digits must
+            // hand them back untouched rather than eat them as unusable.
+            ("aperos-creatifs", "aperos-creatifs"),
         ];
 
         for (label, expected) in cases {

@@ -29,7 +29,7 @@ use crate::components::ui::select::{
 use crate::components::ui::service_icon::ServiceIcon;
 use crate::components::ui::table::*;
 use crate::components::ui::textarea::Textarea;
-use crate::models::{SERVICE_ICONS, ServiceView, icon_label, section_title};
+use crate::models::{SERVICE_ICONS, ServiceView, icon_label, section_title, slugify};
 use crate::pages::admin::AdminShell;
 
 /// What the admin is doing to the workshop list right now.
@@ -275,6 +275,27 @@ fn ServiceForm(
     // method on the `else` block at a glance, which is not what it means.
     let pro_value = if pro { "oui" } else { "non" };
 
+    let label_text = RwSignal::new(label.clone());
+    let slug_text = RwSignal::new(slug.clone());
+    // What the prefill last wrote, to tell its own doing from the admin's typing.
+    let generated = RwSignal::new(String::new());
+
+    // Creation only: on an edit the slug is read-only text, there being sessions
+    // and bookings filed under it.
+    if !editing_existing {
+        Effect::new(move |_| {
+            let candidate = slugify(&label_text.get());
+
+            // Silent for good once the admin has typed a slug of their own: the
+            // field is theirs from then on, and rewording the name must not undo
+            // it. Both start empty, so the first comparison holds and it fills.
+            if slug_text.get_untracked() == generated.get_untracked() {
+                slug_text.set(candidate.clone());
+                generated.set(candidate);
+            }
+        });
+    }
+
     view! {
         <Card>
             <CardHeader>
@@ -297,7 +318,33 @@ fn ServiceForm(
 
                             <div class="grid gap-3">
                                 <Label r#for="label">"Nom"</Label>
-                                <Input id="label" name="label" required=true attr:value=label/>
+                                // Bound only on a creation, where the slug follows
+                                // what is typed here. `bind:value` renders no
+                                // `value` attribute server-side, so an edit keeps
+                                // the plain attribute or it would open blank.
+                                {if editing_existing {
+                                    Either::Left(
+                                        view! {
+                                            <Input
+                                                id="label"
+                                                name="label"
+                                                required=true
+                                                attr:value=label
+                                            />
+                                        },
+                                    )
+                                } else {
+                                    Either::Right(
+                                        view! {
+                                            <Input
+                                                id="label"
+                                                name="label"
+                                                required=true
+                                                bind_value=label_text
+                                            />
+                                        },
+                                    )
+                                }}
                             </div>
 
                             <div class="grid gap-3">
@@ -324,6 +371,7 @@ fn ServiceForm(
                                                 id="slug"
                                                 name="slug"
                                                 required=true
+                                                bind_value=slug_text
                                                 attr:placeholder="aperos-creatifs"
                                             />
                                             <p class="text-sm text-muted-foreground">

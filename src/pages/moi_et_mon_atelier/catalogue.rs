@@ -17,7 +17,7 @@ pub fn CataloguePage() -> impl IntoView {
     let services = Resource::new(|| (), |()| async move { all_services().await });
 
     view! {
-        <Title text="Catalogue des ateliers — Bulle Créaline"/>
+        <Title text="Catalogue des ateliers — Bulle Créaline (E.I)"/>
 
         <div class="py-6 mx-auto space-y-10 max-w-6xl">
             <div class="space-y-4 text-center">

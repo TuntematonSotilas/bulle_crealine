@@ -62,7 +62,7 @@ pub fn ServicePage() -> impl IntoView {
                     match found {
                         None => Either::Left(view! { <NotFound/> }),
                         Some(service) => {
-                            let title = format!("{} — Bulle Créaline", service.label);
+                            let title = format!("{} — Bulle Créaline (E.I)", service.label);
 
                             Either::Right(
                                 view! {

@@ -12,7 +12,7 @@ pub fn FooterBlock() -> impl IntoView {
                     <div class="flex items-center gap-2">
                         <img src="/assets/icon.svg" alt="Logo" class="w-16 h-16"/>
                         <div class="flex flex-col">
-                            <div>Bulle Créaline</div>
+                            <div>Bulle Créaline (E.I)</div>
                             <div class="text-sm text-muted-foreground">Ma source de créativité</div>
                         </div>
                     </div>

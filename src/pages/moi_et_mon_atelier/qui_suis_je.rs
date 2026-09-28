@@ -65,7 +65,7 @@ pub fn QuiSuisJePage() -> impl IntoView {
                     <div class="space-y-4 rounded-[2rem] border border-border bg-surface text-surface-foreground p-6 shadow-sm">
                         <p class="text-base leading-8">
                             "Avec "
-                            <span class="font-semibold text-heading">"La Bulle Créaline"</span>
+                            <span class="font-semibold text-heading">"La Bulle Créaline (E.I)"</span>
                             ", je souhaite offrir un lieu chaleureux, vivant et rassurant, où l'on vient créer, souffler et repartir avec un peu plus de fierté et de joie."
                         </p>
                         /* Sized at 24px so it clears WCAG as large text: the accent
