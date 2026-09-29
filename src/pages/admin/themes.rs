@@ -36,6 +36,103 @@ type SaveAction = Action<FormData, Result<(), ServerFnError>>;
 /// How the picker words "no workshop", which posts an empty slug.
 const NO_SERVICE: &str = "Aucun";
 
+/// What the filter picks to mean "do not filter".
+///
+/// Safe as a sentinel: [`crate::models::is_valid_slug`] allows only lowercase
+/// letters, digits and hyphens, so no workshop can ever answer to it. The empty
+/// string is left to mean the themes attached to nothing, which is what they
+/// actually store.
+const ALL_SERVICES: &str = "*";
+
+/// How the filter words its two choices that are not a workshop.
+const ALL_SERVICES_LABEL: &str = "Tous les ateliers";
+const UNATTACHED_LABEL: &str = "Sans atelier";
+
+/// Which themes the table shows.
+#[derive(Clone, Debug, Default, PartialEq)]
+enum ServiceFilter {
+    #[default]
+    All,
+    /// Only the themes attached to this workshop.
+    Workshop(String),
+    /// Only the themes attached to none.
+    Unattached,
+}
+
+impl ServiceFilter {
+    /// Reads back what the picker chose. Anything unexpected means no filter,
+    /// which is the harmless reading: showing too much, never too little.
+    fn from_choice(choice: Option<String>) -> Self {
+        match choice.as_deref() {
+            None | Some(ALL_SERVICES) => Self::All,
+            Some("") => Self::Unattached,
+            Some(slug) => Self::Workshop(slug.to_owned()),
+        }
+    }
+
+    /// The value the picker has to open on to be showing this filter.
+    fn choice(&self) -> String {
+        match self {
+            Self::All => ALL_SERVICES.to_owned(),
+            Self::Workshop(slug) => slug.clone(),
+            Self::Unattached => String::new(),
+        }
+    }
+
+    fn keeps(&self, theme: &ThemeView) -> bool {
+        match self {
+            Self::All => true,
+            Self::Workshop(slug) => &theme.service_slug == slug,
+            Self::Unattached => theme.service_slug.is_empty(),
+        }
+    }
+}
+
+/// The rows a filter leaves on screen.
+///
+/// A filter matching nothing is treated as no filter at all: the last theme of a
+/// workshop can be deleted while that workshop is the one being shown, and a table
+/// emptied by a choice that is no longer offered would be a dead end.
+fn matching(rows: &[ThemeView], filter: &ServiceFilter) -> Vec<ThemeView> {
+    let kept: Vec<ThemeView> = rows.iter().filter(|theme| filter.keeps(theme)).cloned().collect();
+
+    if kept.is_empty() { rows.to_vec() } else { kept }
+}
+
+/// The workshops the filter offers, as `(value, label)`, without the "all" entry
+/// the picker adds itself.
+///
+/// Read off the themes rather than off [`all_services`]: a workshop carrying no
+/// theme would be a choice leading nowhere, and a dead link -- the slug of a
+/// workshop deleted since -- has no workshop left to be read from, yet its themes
+/// still need grouping. Each label carries its count, which is the whole reason to
+/// look at this list before picking from it.
+fn filter_choices(rows: &[ThemeView]) -> Vec<(String, String)> {
+    let mut groups: Vec<(String, String, usize)> = Vec::new();
+
+    for theme in rows {
+        match groups.iter_mut().find(|(slug, _, _)| *slug == theme.service_slug) {
+            Some((_, _, count)) => *count += 1,
+            None => groups.push((theme.service_slug.clone(), theme.service_label.clone(), 1)),
+        }
+    }
+
+    // Alphabetically, the themes arriving in an order that is none of the picker's
+    // business. The unattached go last whatever their wording sorts to: they are
+    // the odd entry out, not one workshop among the others.
+    groups.sort_by(|left, right| {
+        left.0.is_empty().cmp(&right.0.is_empty()).then_with(|| left.1.cmp(&right.1))
+    });
+
+    groups
+        .into_iter()
+        .map(|(slug, label, count)| {
+            let wording = if slug.is_empty() { UNATTACHED_LABEL } else { label.as_str() };
+            (slug, format!("{wording} ({count})"))
+        })
+        .collect()
+}
+
 /// What the admin is doing to the theme list right now.
 #[derive(Clone, Debug, PartialEq)]
 enum Editing {
@@ -58,6 +155,11 @@ pub fn AdminThemesPage() -> impl IntoView {
     });
     let delete = ServerAction::<DeleteTheme>::new();
     let editing = RwSignal::new(Editing::None);
+
+    // Held here rather than in the table, which is rebuilt every time a write
+    // reloads the list: editing a theme would otherwise drop the admin back to the
+    // whole list, right after they narrowed it down to find that theme.
+    let filter = RwSignal::new(ServiceFilter::default());
 
     // Reloads whenever either action reports back, so the table follows the writes.
     let themes = Resource::new(
@@ -159,7 +261,11 @@ pub fn AdminThemesPage() -> impl IntoView {
                                 },
                             )
                         }
-                        Ok(rows) => Either::Right(view! { <ThemeTable rows=rows editing=editing/> }),
+                        Ok(rows) => {
+                            Either::Right(
+                                view! { <ThemeTable rows=rows filter=filter editing=editing/> },
+                            )
+                        }
                     }
                 })}
             </Transition>
@@ -168,9 +274,13 @@ pub fn AdminThemesPage() -> impl IntoView {
     }
 }
 
-/// The listing itself.
+/// The listing itself, under the workshop filter.
 #[component]
-fn ThemeTable(rows: Vec<ThemeView>, editing: RwSignal<Editing>) -> impl IntoView {
+fn ThemeTable(
+    rows: Vec<ThemeView>,
+    filter: RwSignal<ServiceFilter>,
+    editing: RwSignal<Editing>,
+) -> impl IntoView {
     if rows.is_empty() {
         return Either::Left(view! {
             <Alert>
@@ -182,60 +292,26 @@ fn ThemeTable(rows: Vec<ThemeView>, editing: RwSignal<Editing>) -> impl IntoView
         });
     }
 
-    let body = rows
-        .into_iter()
-        .map(|theme| {
-            let for_edit = theme.clone();
-            let for_delete = theme.clone();
+    let total = rows.len();
+    let choices = filter_choices(&rows);
+    // A single choice covers every theme on the page, so the picker would filter
+    // nothing: one more control to read past, and no way to change what is shown.
+    let worth_filtering = choices.len() > 1;
 
-            // Read out of `theme` before the closures below capture it.
-            let name = theme.name.clone();
-            let photo_url = theme.photo_url.clone();
-            let alt = theme.name.clone();
-            // An em dash rather than a blank cell: the link is optional, and a gap
-            // reads as missing data rather than as a deliberate "none".
-            let service = if theme.service_label.is_empty() {
-                "—".to_owned()
-            } else {
-                theme.service_label.clone()
-            };
-
-            view! {
-                <TableRow>
-                    <TableCell>
-                        <img
-                            src=photo_url
-                            alt=alt
-                            class="object-cover w-16 h-16 rounded-md border"
-                            loading="lazy"
-                        />
-                    </TableCell>
-                    <TableCell class="font-medium">{name}</TableCell>
-                    <TableCell class="text-muted-foreground">{service}</TableCell>
-                    <TableCell>
-                        <div class="flex gap-2 justify-end">
-                            <Button
-                                variant=ButtonVariant::Outline
-                                size=ButtonSize::Sm
-                                on:click=move |_| editing.set(Editing::Theme(for_edit.clone()))
-                            >
-                                "Modifier"
-                            </Button>
-                            <Button
-                                variant=ButtonVariant::Destructive
-                                size=ButtonSize::Sm
-                                on:click=move |_| editing.set(Editing::Deleting(for_delete.clone()))
-                            >
-                                "Supprimer"
-                            </Button>
-                        </div>
-                    </TableCell>
-                </TableRow>
-            }
-        })
-        .collect::<Vec<_>>();
+    // Stored rather than moved into the closure: the filter re-runs it, and each
+    // run needs the full list again to narrow it down afresh.
+    let rows = StoredValue::new(rows);
+    let body = move || {
+        rows.with_value(|rows| matching(rows, &filter.get()))
+            .into_iter()
+            .map(|theme| view! { <ThemeRow theme=theme editing=editing/> })
+            .collect::<Vec<_>>()
+    };
 
     Either::Right(view! {
+        {worth_filtering
+            .then(|| view! { <ThemeFilter choices=choices total=total filter=filter/> })}
+
         <TableContainer>
             <Table>
                 <TableHeader>
@@ -250,6 +326,121 @@ fn ThemeTable(rows: Vec<ThemeView>, editing: RwSignal<Editing>) -> impl IntoView
             </Table>
         </TableContainer>
     })
+}
+
+/// One theme in the listing.
+#[component]
+fn ThemeRow(theme: ThemeView, editing: RwSignal<Editing>) -> impl IntoView {
+    let for_edit = theme.clone();
+    let for_delete = theme.clone();
+
+    // Read out of `theme` before the closures below capture it.
+    let name = theme.name.clone();
+    let photo_url = theme.photo_url.clone();
+    let alt = theme.name.clone();
+    // An em dash rather than a blank cell: the link is optional, and a gap reads
+    // as missing data rather than as a deliberate "none".
+    let service = if theme.service_label.is_empty() {
+        "—".to_owned()
+    } else {
+        theme.service_label.clone()
+    };
+
+    view! {
+        <TableRow>
+            <TableCell>
+                <img
+                    src=photo_url
+                    alt=alt
+                    class="object-cover w-16 h-16 rounded-md border"
+                    loading="lazy"
+                />
+            </TableCell>
+            <TableCell class="font-medium">{name}</TableCell>
+            <TableCell class="text-muted-foreground">{service}</TableCell>
+            <TableCell>
+                <div class="flex gap-2 justify-end">
+                    <Button
+                        variant=ButtonVariant::Outline
+                        size=ButtonSize::Sm
+                        on:click=move |_| editing.set(Editing::Theme(for_edit.clone()))
+                    >
+                        "Modifier"
+                    </Button>
+                    <Button
+                        variant=ButtonVariant::Destructive
+                        size=ButtonSize::Sm
+                        on:click=move |_| editing.set(Editing::Deleting(for_delete.clone()))
+                    >
+                        "Supprimer"
+                    </Button>
+                </div>
+            </TableCell>
+        </TableRow>
+    }
+}
+
+/// Narrows the listing to one workshop, or to the themes attached to none.
+///
+/// Filters the rows already in hand rather than asking the server again: the list
+/// is a page of an admin screen, not a catalogue, and a round trip would cost more
+/// than the whole table is worth.
+#[component]
+fn ThemeFilter(
+    /// `(value, label)` per workshop, from [`filter_choices`].
+    choices: Vec<(String, String)>,
+    /// How many themes there are in all, to word the "all" entry.
+    total: usize,
+    filter: RwSignal<ServiceFilter>,
+) -> impl IntoView {
+    let all_label = format!("{ALL_SERVICES_LABEL} ({total})");
+
+    // Falls back to showing everything when the chosen workshop is no longer among
+    // them, which is what `matching` does with those rows: the trigger must not
+    // claim a filter the table is not applying.
+    let current = filter.get_untracked().choice();
+    let (value, label) = choices
+        .iter()
+        .find(|(value, _)| *value == current)
+        .cloned()
+        .unwrap_or_else(|| (ALL_SERVICES.to_owned(), all_label.clone()));
+
+    let pick = Callback::new(move |choice: Option<String>| {
+        filter.set(ServiceFilter::from_choice(choice));
+    });
+
+    view! {
+        <div class="flex flex-wrap gap-3 items-center mb-4">
+            <Label r#for="theme-filter">"Filtrer par atelier"</Label>
+
+            // No `name`: this picker sits outside any form and posts nothing, the
+            // choice being read through `on_change` alone.
+            <Select default_value=value default_label=label on_change=pick>
+                <SelectTrigger id="theme-filter">
+                    <SelectValue placeholder=ALL_SERVICES_LABEL/>
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectGroup>
+                        <SelectOption value=ALL_SERVICES.to_string() label=all_label.clone()>
+                            {all_label}
+                        </SelectOption>
+                        // Built here rather than above: an option reads the
+                        // `Select`'s context, which only exists inside this view.
+                        {choices
+                            .into_iter()
+                            .map(|(value, label)| {
+                                view! {
+                                    <SelectOption value=value label=label.clone()>
+                                        {label}
+                                    </SelectOption>
+                                }
+                            })
+                            .collect::<Vec<_>>()}
+                    </SelectGroup>
+                </SelectContent>
+            </Select>
+        </div>
+    }
 }
 
 /// Create or edit form. `theme` being `None` means a creation.
@@ -646,6 +837,26 @@ mod tests {
         }
     }
 
+    /// A theme under another workshop, so a filter can be seen to leave one out.
+    fn other() -> ThemeView {
+        ThemeView {
+            id: "651d1f0a0000000000000002".to_owned(),
+            name: "Bijoux en résine".to_owned(),
+            service_slug: "ateliers-parents-enfants".to_owned(),
+            service_label: "Ateliers parents-enfants".to_owned(),
+            ..theme()
+        }
+    }
+
+    fn table_html(rows: Vec<ThemeView>) -> String {
+        Owner::new().with(|| {
+            let filter = RwSignal::new(ServiceFilter::default());
+            let editing = RwSignal::new(Editing::None);
+
+            view! { <ThemeTable rows=rows filter=filter editing=editing/> }.to_html()
+        })
+    }
+
     /// A creation has no photo to show yet, and must ask for one.
     #[test]
     fn creation_form_requires_a_photo_and_shows_none() {
@@ -797,10 +1008,7 @@ mod tests {
     /// as an empty state.
     #[test]
     fn table_lists_a_thumbnail_per_theme() {
-        let html = Owner::new().with(|| {
-            let editing = RwSignal::new(Editing::None);
-            view! { <ThemeTable rows=vec![theme()] editing=editing/> }.to_html()
-        });
+        let html = table_html(vec![theme()]);
 
         assert!(html.contains(&theme().photo_url), "the thumbnail should render: {html}");
         assert!(html.contains("Aquarelle"), "next to the name: {html}");
@@ -809,10 +1017,7 @@ mod tests {
     /// The column is what the whole field is for on this page.
     #[test]
     fn the_table_names_the_workshop_a_theme_belongs_to() {
-        let html = Owner::new().with(|| {
-            let editing = RwSignal::new(Editing::None);
-            view! { <ThemeTable rows=vec![theme()] editing=editing/> }.to_html()
-        });
+        let html = table_html(vec![theme()]);
 
         assert!(html.contains("Atelier"), "no column heading: {html}");
         assert!(html.contains("Apéros créatifs"), "no workshop: {html}");
@@ -822,10 +1027,7 @@ mod tests {
     /// rather than as a deliberate "none".
     #[test]
     fn an_unlinked_theme_shows_a_dash() {
-        let html = Owner::new().with(|| {
-            let editing = RwSignal::new(Editing::None);
-            view! { <ThemeTable rows=vec![unlinked()] editing=editing/> }.to_html()
-        });
+        let html = table_html(vec![unlinked()]);
 
         assert!(html.contains("—"), "no dash: {html}");
         assert!(html.contains("Aquarelle"), "the theme still shows: {html}");
@@ -833,12 +1035,116 @@ mod tests {
 
     #[test]
     fn table_says_so_when_there_is_nothing_yet() {
-        let html = Owner::new().with(|| {
-            let editing = RwSignal::new(Editing::None);
-            view! { <ThemeTable rows=vec![] editing=editing/> }.to_html()
-        });
+        assert!(
+            table_html(vec![]).contains("Aucun thème"),
+            "the empty state should show"
+        );
+    }
 
-        assert!(html.contains("Aucun thème"), "the empty state should show: {html}");
+    /// One entry per workshop, each saying how many themes are behind it -- which
+    /// is the whole reason to read the list before picking from it.
+    #[test]
+    fn the_filter_counts_the_themes_of_each_workshop() {
+        let choices = filter_choices(&[theme(), other(), unlinked(), other()]);
+
+        assert_eq!(choices.len(), 3, "one entry per workshop was expected: {choices:?}");
+        assert!(
+            choices.contains(&("aperos-creatifs".to_owned(), "Apéros créatifs (1)".to_owned())),
+            "the lone theme of its workshop is miscounted: {choices:?}"
+        );
+        assert!(
+            choices.contains(&(
+                "ateliers-parents-enfants".to_owned(),
+                "Ateliers parents-enfants (2)".to_owned(),
+            )),
+            "two themes under one workshop should count as two: {choices:?}"
+        );
+    }
+
+    /// The themes attached to nothing are a choice of their own, worded rather than
+    /// left nameless, and last: they are the odd entry out, not one workshop among
+    /// the others.
+    #[test]
+    fn the_unattached_themes_are_a_choice_and_come_last() {
+        let choices = filter_choices(&[unlinked(), other(), theme()]);
+
+        let (slug, label) = choices.last().expect("no choice at all");
+        assert!(slug.is_empty(), "the unattached should come last: {choices:?}");
+        assert!(label.starts_with(UNATTACHED_LABEL), "and be worded: {choices:?}");
+    }
+
+    /// The themes arrive in an order of the server's own, which would leave the
+    /// choices in no order at all.
+    #[test]
+    fn the_filter_lists_the_workshops_alphabetically() {
+        let choices = filter_choices(&[other(), theme()]);
+
+        let labels: Vec<_> = choices.iter().map(|(_, label)| label.clone()).collect();
+        let mut sorted = labels.clone();
+        sorted.sort();
+        assert_eq!(labels, sorted, "the workshops are not in order");
+    }
+
+    #[test]
+    fn a_filter_keeps_only_the_themes_of_its_workshop() {
+        let rows = vec![theme(), other(), unlinked()];
+        let kept = matching(&rows, &ServiceFilter::Workshop("aperos-creatifs".to_owned()));
+
+        assert_eq!(kept, vec![theme()], "the other workshops leaked through");
+    }
+
+    #[test]
+    fn the_unattached_filter_keeps_the_themes_under_no_workshop() {
+        let rows = vec![theme(), unlinked()];
+        let kept = matching(&rows, &ServiceFilter::Unattached);
+
+        assert_eq!(kept, vec![unlinked()], "an attached theme leaked through");
+    }
+
+    /// The last theme of a workshop can be deleted while that workshop is the one
+    /// being shown, and the filter outlives the reload. An empty table would then
+    /// be a dead end.
+    #[test]
+    fn a_filter_matching_nothing_shows_everything() {
+        let rows = vec![theme(), other()];
+        let kept = matching(&rows, &ServiceFilter::Workshop("supprime-depuis".to_owned()));
+
+        assert_eq!(kept.len(), 2, "a stale filter should not empty the table");
+    }
+
+    /// What the picker chose has to read back as the filter that was picked, or the
+    /// table would narrow to something other than the trigger shows.
+    #[test]
+    fn every_filter_survives_the_trip_through_the_picker() {
+        for filter in [
+            ServiceFilter::All,
+            ServiceFilter::Workshop("aperos-creatifs".to_owned()),
+            ServiceFilter::Unattached,
+        ] {
+            let read_back = ServiceFilter::from_choice(Some(filter.choice()));
+            assert_eq!(read_back, filter, "{filter:?} did not survive");
+        }
+    }
+
+    /// Asserted on the wording: `SelectOption` keeps its value in a closure and
+    /// renders no `value` attribute at all.
+    #[test]
+    fn the_table_offers_a_filter_over_the_workshops_it_lists() {
+        let html = table_html(vec![theme(), other()]);
+
+        assert!(html.contains("Filtrer par atelier"), "no filter: {html}");
+        assert!(html.contains(ALL_SERVICES_LABEL), "no way back to the whole list: {html}");
+        assert!(html.contains("Apéros créatifs (1)"), "a workshop is missing: {html}");
+        assert!(html.contains("Ateliers parents-enfants (1)"), "and so is the other: {html}");
+    }
+
+    /// With every theme under the same workshop the picker would filter nothing.
+    #[test]
+    fn a_single_workshop_carries_no_filter() {
+        let html = table_html(vec![theme(), theme()]);
+
+        assert!(!html.contains("Filtrer par atelier"), "a useless filter is shown: {html}");
+        assert!(html.contains("Aquarelle"), "the table itself should still render: {html}");
     }
 
     /// The warning is what tells the admin a rename is not harmless.
