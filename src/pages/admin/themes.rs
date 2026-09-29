@@ -45,8 +45,8 @@ const NO_SERVICE: &str = "Aucun";
 const ALL_SERVICES: &str = "*";
 
 /// How the filter words its two choices that are not a workshop.
-const ALL_SERVICES_LABEL: &str = "Tous les ateliers";
-const UNATTACHED_LABEL: &str = "Sans atelier";
+const ALL_SERVICES_LABEL: &str = "Tous les services";
+const UNATTACHED_LABEL: &str = "Sans service";
 
 /// Which themes the table shows.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -318,7 +318,7 @@ fn ThemeTable(
                     <TableRow>
                         <TableHead>"Photo"</TableHead>
                         <TableHead>"Nom"</TableHead>
-                        <TableHead>"Atelier"</TableHead>
+                        <TableHead>"Service"</TableHead>
                         <TableHead class="text-right">"Actions"</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -411,7 +411,7 @@ fn ThemeFilter(
 
     view! {
         <div class="flex flex-wrap gap-3 items-center mb-4">
-            <Label r#for="theme-filter">"Filtrer par atelier"</Label>
+            <Label r#for="theme-filter">"Filtrer par service"</Label>
 
             // No `name`: this picker sits outside any form and posts nothing, the
             // choice being read through `on_change` alone.
@@ -534,7 +534,7 @@ fn ThemeForm(
                             </div>
 
                             <div class="grid gap-3">
-                                <Label r#for="service">"Atelier"</Label>
+                                <Label r#for="service">"Service"</Label>
                                 <Transition fallback=|| {
                                     view! {
                                         <p class="text-sm text-muted-foreground">"Chargement…"</p>
@@ -558,7 +558,7 @@ fn ThemeForm(
                                     }}
                                 </Transition>
                                 <p class="text-sm text-muted-foreground">
-                                    "Facultatif. Sert à ranger le thème sous un atelier dans le catalogue."
+                                    "Facultatif. Sert à ranger le thème sous un service dans le catalogue."
                                 </p>
                             </div>
 
@@ -638,7 +638,7 @@ fn ServicePicker(
             default_label=label
         >
             <SelectTrigger id="service">
-                <SelectValue placeholder="Atelier"/>
+                <SelectValue placeholder="Service"/>
             </SelectTrigger>
             <SelectContent>
                 <SelectGroup>
@@ -956,7 +956,7 @@ mod tests {
     /// it were still a choice.
     #[test]
     fn a_dead_link_falls_back_to_no_workshop() {
-        let selected = Some(("supprime".to_owned(), "Atelier supprimé".to_owned()));
+        let selected = Some(("supprime".to_owned(), "Service supprimé".to_owned()));
 
         assert!(
             !picker_html(selected).contains(r#"value="supprime""#),
@@ -975,7 +975,7 @@ mod tests {
             view! { <ThemeForm action=action theme=None error=error on_cancel=|| {}/> }.to_html()
         });
 
-        assert!(html.contains("Atelier"), "no field: {html}");
+        assert!(html.contains("Service"), "no field: {html}");
         assert!(html.contains("Facultatif"), "it should say it is optional: {html}");
     }
 
@@ -1019,7 +1019,7 @@ mod tests {
     fn the_table_names_the_workshop_a_theme_belongs_to() {
         let html = table_html(vec![theme()]);
 
-        assert!(html.contains("Atelier"), "no column heading: {html}");
+        assert!(html.contains("Service"), "no column heading: {html}");
         assert!(html.contains("Apéros créatifs"), "no workshop: {html}");
     }
 
@@ -1132,7 +1132,7 @@ mod tests {
     fn the_table_offers_a_filter_over_the_workshops_it_lists() {
         let html = table_html(vec![theme(), other()]);
 
-        assert!(html.contains("Filtrer par atelier"), "no filter: {html}");
+        assert!(html.contains("Filtrer par service"), "no filter: {html}");
         assert!(html.contains(ALL_SERVICES_LABEL), "no way back to the whole list: {html}");
         assert!(html.contains("Apéros créatifs (1)"), "a workshop is missing: {html}");
         assert!(html.contains("Ateliers parents-enfants (1)"), "and so is the other: {html}");
@@ -1143,7 +1143,7 @@ mod tests {
     fn a_single_workshop_carries_no_filter() {
         let html = table_html(vec![theme(), theme()]);
 
-        assert!(!html.contains("Filtrer par atelier"), "a useless filter is shown: {html}");
+        assert!(!html.contains("Filtrer par service"), "a useless filter is shown: {html}");
         assert!(html.contains("Aquarelle"), "the table itself should still render: {html}");
     }
 

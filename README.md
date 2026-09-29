@@ -13,14 +13,18 @@ Live here : https://bulle-crealine.onrender.com
 
     cargo leptos watch
 
-## Lint 
-
-    cargo clippy
-
 ## Build
 
     cargo leptos build --release
+
+## Lint 
+
+    cargo clippy
     
+## Tests
+
+    cargo test --features ssr
+
 ## Réservations (MongoDB)
 
 Deux collections dans la base `bulle_crealine_db` :
