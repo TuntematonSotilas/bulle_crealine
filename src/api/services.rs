@@ -126,16 +126,16 @@ pub async fn save_service(
         .map_err(|error| duplicate_or_failure("updating a workshop", error))
 }
 
-/// Drops a workshop, unless sessions are still filed under it.
+/// Drops a workshop, unless sessions or themes are still filed under it.
 ///
-/// Refused rather than cascaded, like a theme: those sessions store the slug, and
-/// a session whose workshop is gone loses its name on the home page, in the admin
-/// table and on the booking page at once.
+/// Refused rather than cascaded, like a theme: sessions and themes store the slug,
+/// and a session whose workshop is gone loses its name on the home page, in the
+/// admin table and on the booking page at once.
 #[server]
 pub async fn delete_service(id: String) -> Result<(), ServerFnError> {
     use crate::api::log_failure;
     use crate::auth::require_admin;
-    use crate::db::{service, session};
+    use crate::db::{service, session, theme};
 
     require_admin()?;
 
@@ -153,6 +153,19 @@ pub async fn delete_service(id: String) -> Result<(), ServerFnError> {
     if used_by > 0 {
         return Err(ServerFnError::new(format!(
             "{used_by} séance(s) portent ce service : supprimez-les d'abord."
+        )));
+    }
+
+    // Checked after the sessions, which are the heavier obstacle: a theme only has
+    // to be detached, so reporting it first would send the admin to the smaller
+    // job while the bigger one still stood in the way.
+    let themed = theme::count_for_service(&found.slug)
+        .await
+        .map_err(|error| log_failure("counting the themes of a workshop", error))?;
+
+    if themed > 0 {
+        return Err(ServerFnError::new(format!(
+            "{themed} thème(s) sont rattachés à ce service : détachez-les d'abord dans « Thèmes »."
         )));
     }
 

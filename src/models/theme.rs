@@ -25,6 +25,17 @@ pub struct ThemeView {
     pub name: String,
     /// Where to fetch the photo, already carrying the cache-busting stamp.
     pub photo_url: String,
+    /// Slug of the workshop this theme belongs to, empty when it belongs to none.
+    ///
+    /// Optional on purpose: a theme can be run for any workshop, and the link is
+    /// there to say which one it is meant for, not to restrict anything.
+    pub service_slug: String,
+    /// Name of that workshop, resolved server-side so the table joins nothing.
+    ///
+    /// Empty when there is no link at all, and `"Atelier supprimé"` when the slug
+    /// names a workshop that has since been deleted -- two situations that read
+    /// differently and must not be confused.
+    pub service_label: String,
 }
 
 /// One line of "here is what changing this theme affects".

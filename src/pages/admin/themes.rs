@@ -12,6 +12,7 @@ use leptos_meta::Title;
 use wasm_bindgen::JsCast;
 use web_sys::{FormData, HtmlFormElement};
 
+use crate::api::services::all_services;
 use crate::api::themes::{DeleteTheme, all_themes, save_theme, theme_sessions};
 use crate::auth::user_message;
 use crate::components::ui::alert::{Alert, AlertDescription, AlertTitle, AlertVariant};
@@ -19,6 +20,9 @@ use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
 use crate::components::ui::input::{Input, InputType};
 use crate::components::ui::label::Label;
+use crate::components::ui::select::{
+    Select, SelectContent, SelectGroup, SelectOption, SelectTrigger, SelectValue,
+};
 use crate::components::ui::table::*;
 use crate::models::{MAX_PHOTO_LABEL, ThemeView};
 use crate::pages::admin::AdminShell;
@@ -28,6 +32,9 @@ use crate::pages::admin::AdminShell;
 /// Dispatched locally rather than through a `ServerAction`: a `FormData` is neither
 /// `Send` nor `Sync`, since it only ever exists in the browser.
 type SaveAction = Action<FormData, Result<(), ServerFnError>>;
+
+/// How the picker words "no workshop", which posts an empty slug.
+const NO_SERVICE: &str = "Aucun";
 
 /// What the admin is doing to the theme list right now.
 #[derive(Clone, Debug, PartialEq)]
@@ -185,6 +192,13 @@ fn ThemeTable(rows: Vec<ThemeView>, editing: RwSignal<Editing>) -> impl IntoView
             let name = theme.name.clone();
             let photo_url = theme.photo_url.clone();
             let alt = theme.name.clone();
+            // An em dash rather than a blank cell: the link is optional, and a gap
+            // reads as missing data rather than as a deliberate "none".
+            let service = if theme.service_label.is_empty() {
+                "—".to_owned()
+            } else {
+                theme.service_label.clone()
+            };
 
             view! {
                 <TableRow>
@@ -197,6 +211,7 @@ fn ThemeTable(rows: Vec<ThemeView>, editing: RwSignal<Editing>) -> impl IntoView
                         />
                     </TableCell>
                     <TableCell class="font-medium">{name}</TableCell>
+                    <TableCell class="text-muted-foreground">{service}</TableCell>
                     <TableCell>
                         <div class="flex gap-2 justify-end">
                             <Button
@@ -227,6 +242,7 @@ fn ThemeTable(rows: Vec<ThemeView>, editing: RwSignal<Editing>) -> impl IntoView
                     <TableRow>
                         <TableHead>"Photo"</TableHead>
                         <TableHead>"Nom"</TableHead>
+                        <TableHead>"Atelier"</TableHead>
                         <TableHead class="text-right">"Actions"</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -248,6 +264,13 @@ fn ThemeForm(
     let editing_existing = !id.is_empty();
     let name = theme.as_ref().map(|t| t.name.clone()).unwrap_or_default();
     let current_photo = theme.as_ref().map(|t| t.photo_url.clone());
+
+    // The workshop this theme already points at, if it still points at a live one.
+    let linked = theme.as_ref().and_then(|t| {
+        (!t.service_slug.is_empty())
+            .then(|| (t.service_slug.clone(), t.service_label.clone()))
+    });
+    let services = Resource::new(|| (), |()| async move { all_services().await });
 
     // Hand-rolled instead of `<ActionForm>`: only a multipart body can carry a file.
     let submit = move |ev: leptos::ev::SubmitEvent| {
@@ -319,6 +342,35 @@ fn ThemeForm(
                                 </p>
                             </div>
 
+                            <div class="grid gap-3">
+                                <Label r#for="service">"Atelier"</Label>
+                                <Transition fallback=|| {
+                                    view! {
+                                        <p class="text-sm text-muted-foreground">"Chargement…"</p>
+                                    }
+                                }>
+                                    {move || {
+                                        let selected = linked.clone();
+
+                                        Suspend::new(async move {
+                                            match services.await {
+                                                Err(error) => Either::Left(view! {
+                                                    <Alert variant=AlertVariant::Destructive>
+                                                        {user_message(&error)}
+                                                    </Alert>
+                                                }),
+                                                Ok(list) => Either::Right(view! {
+                                                    <ServicePicker services=list selected=selected/>
+                                                }),
+                                            }
+                                        })
+                                    }}
+                                </Transition>
+                                <p class="text-sm text-muted-foreground">
+                                    "Facultatif. Sert à ranger le thème sous un atelier dans le catalogue."
+                                </p>
+                            </div>
+
                         </div>
 
                         {current_photo
@@ -363,6 +415,62 @@ fn ThemeForm(
                 </form>
             </CardContent>
         </Card>
+    }
+}
+
+/// The workshop picker itself, split from the fetch above so it can be rendered
+/// from a plain `Vec`: what a `Transition` wraps never resolves under a
+/// synchronous `to_html`, which would leave the picker untested.
+///
+/// `selected` is the workshop the theme already points at, as `(slug, label)`.
+#[component]
+fn ServicePicker(
+    services: Vec<crate::models::ServiceView>,
+    selected: Option<(String, String)>,
+) -> impl IntoView {
+    // Only the bookable ones. A workshop run for a structure agrees on its dates
+    // directly and has no catalogue of themes to be ranged under, which is the
+    // one thing this link is for.
+    let services: Vec<_> = services.into_iter().filter(|service| !service.pro).collect();
+
+    // Falls back to no link when the stored slug is not among them -- a workshop
+    // deleted since, or one moved into the section for structures.
+    let (value, label) = selected
+        .filter(|(slug, _)| services.iter().any(|service| &service.slug == slug))
+        .unwrap_or_else(|| (String::new(), NO_SERVICE.to_owned()));
+
+    view! {
+        <Select
+            class="w-full max-w-sm"
+            name="service".to_string()
+            default_value=value
+            default_label=label
+        >
+            <SelectTrigger id="service">
+                <SelectValue placeholder="Atelier"/>
+            </SelectTrigger>
+            <SelectContent>
+                <SelectGroup>
+                    // The link is optional, so "none" has to be pickable and not
+                    // merely the state the form starts in.
+                    <SelectOption value=String::new() label=NO_SERVICE.to_string()>
+                        {NO_SERVICE}
+                    </SelectOption>
+                    // Built here rather than above: an option reads the `Select`'s
+                    // context, which only exists inside this view.
+                    {services
+                        .into_iter()
+                        .map(|service| {
+                            view! {
+                                <SelectOption value=service.slug label=service.label.clone()>
+                                    {service.label}
+                                </SelectOption>
+                            }
+                        })
+                        .collect::<Vec<_>>()}
+                </SelectGroup>
+            </SelectContent>
+        </Select>
     }
 }
 
@@ -524,12 +632,26 @@ mod tests {
             id: "651d1f0a0000000000000001".to_owned(),
             name: "Aquarelle".to_owned(),
             photo_url: "/media/theme/651d1f0a0000000000000001?v=1".to_owned(),
+            service_slug: "aperos-creatifs".to_owned(),
+            service_label: "Apéros créatifs".to_owned(),
+        }
+    }
+
+    /// A theme left unattached, which is the ordinary case: the link is optional.
+    fn unlinked() -> ThemeView {
+        ThemeView {
+            service_slug: String::new(),
+            service_label: String::new(),
+            ..theme()
         }
     }
 
     /// A creation has no photo to show yet, and must ask for one.
     #[test]
     fn creation_form_requires_a_photo_and_shows_none() {
+        // The workshop picker owns a `Resource`, on a creation as on an edit.
+        crate::pages::admin::init_test_executor();
+
         let html = Owner::new().with(|| {
             // Bound out here: `view!` would read the turbofish as a tag.
             let action: SaveAction = Action::new_local(|_: &FormData| async { Ok(()) });
@@ -541,6 +663,109 @@ mod tests {
         assert!(html.contains("required"), "a creation should demand a photo: {html}");
         assert!(!html.contains("Photo actuelle"), "there is no photo yet: {html}");
         assert!(html.contains("Nouveau thème"), "the title should say so: {html}");
+    }
+
+    fn workshop(slug: &str, label: &str, pro: bool) -> crate::models::ServiceView {
+        crate::models::ServiceView {
+            id: "651d1f0a0000000000000009".to_owned(),
+            slug: slug.to_owned(),
+            label: label.to_owned(),
+            description: String::new(),
+            age: String::new(),
+            steps: Vec::new(),
+            icon: String::new(),
+            pro,
+            position: 0,
+        }
+    }
+
+    /// One of each section, so an assertion about the bookable one cannot pass on
+    /// the other.
+    fn workshops() -> Vec<crate::models::ServiceView> {
+        vec![
+            workshop("aperos-creatifs", "Apéros créatifs", false),
+            workshop("en-institution", "Ateliers en institution", true),
+        ]
+    }
+
+    fn picker_html(selected: Option<(String, String)>) -> String {
+        Owner::new()
+            .with(|| view! { <ServicePicker services=workshops() selected=selected/> }.to_html())
+    }
+
+    /// The link is optional, so "none" has to be pickable rather than merely the
+    /// state the form starts in. Asserted on the wording: `SelectOption` keeps its
+    /// value in a closure and renders no `value` attribute at all.
+    #[test]
+    fn the_picker_offers_no_workshop_and_every_workshop() {
+        let html = picker_html(None);
+
+        assert!(html.contains(NO_SERVICE), "no way to leave it unattached: {html}");
+        assert!(html.contains("Apéros créatifs"), "no workshop offered: {html}");
+        assert!(html.contains(r#"name="service""#), "the form must post it: {html}");
+    }
+
+    /// A workshop run for a structure agrees on its dates directly and has no
+    /// catalogue of themes to be ranged under.
+    #[test]
+    fn the_picker_leaves_out_the_workshops_for_structures() {
+        let html = picker_html(None);
+
+        assert!(
+            !html.contains("Ateliers en institution"),
+            "a workshop for structures should not be offered: {html}"
+        );
+    }
+
+    /// A theme can outlive the section its workshop was in. Keeping the stored
+    /// slug preselected would post back a workshop the picker no longer offers.
+    #[test]
+    fn a_link_to_a_workshop_for_structures_falls_back_to_none() {
+        let selected = Some(("en-institution".to_owned(), "Ateliers en institution".to_owned()));
+
+        assert!(
+            !picker_html(selected).contains(r#"value="en-institution""#),
+            "a workshop moved out of reach should not stay preselected"
+        );
+    }
+
+    /// An edit has to open on the link already stored, or saving without touching
+    /// the picker would quietly drop it.
+    #[test]
+    fn the_picker_opens_on_the_workshop_already_linked() {
+        let selected = Some(("aperos-creatifs".to_owned(), "Apéros créatifs".to_owned()));
+
+        assert!(
+            picker_html(selected).contains(r#"value="aperos-creatifs""#),
+            "the stored link should be the one posted back"
+        );
+    }
+
+    /// A slug naming no workshop -- deleted since -- must not be posted back as if
+    /// it were still a choice.
+    #[test]
+    fn a_dead_link_falls_back_to_no_workshop() {
+        let selected = Some(("supprime".to_owned(), "Atelier supprimé".to_owned()));
+
+        assert!(
+            !picker_html(selected).contains(r#"value="supprime""#),
+            "a workshop that no longer exists should not be preselected"
+        );
+    }
+
+    /// The field has to say it can be left alone; nothing else on this form can.
+    #[test]
+    fn the_form_says_the_link_is_optional() {
+        crate::pages::admin::init_test_executor();
+
+        let html = Owner::new().with(|| {
+            let action: SaveAction = Action::new_local(|_: &FormData| async { Ok(()) });
+            let error: Signal<Option<String>> = Signal::derive(|| None);
+            view! { <ThemeForm action=action theme=None error=error on_cancel=|| {}/> }.to_html()
+        });
+
+        assert!(html.contains("Atelier"), "no field: {html}");
+        assert!(html.contains("Facultatif"), "it should say it is optional: {html}");
     }
 
     /// An edit shows the stored photo and lets the file input stay empty, which is
@@ -579,6 +804,31 @@ mod tests {
 
         assert!(html.contains(&theme().photo_url), "the thumbnail should render: {html}");
         assert!(html.contains("Aquarelle"), "next to the name: {html}");
+    }
+
+    /// The column is what the whole field is for on this page.
+    #[test]
+    fn the_table_names_the_workshop_a_theme_belongs_to() {
+        let html = Owner::new().with(|| {
+            let editing = RwSignal::new(Editing::None);
+            view! { <ThemeTable rows=vec![theme()] editing=editing/> }.to_html()
+        });
+
+        assert!(html.contains("Atelier"), "no column heading: {html}");
+        assert!(html.contains("Apéros créatifs"), "no workshop: {html}");
+    }
+
+    /// Most themes carry no link, and an empty cell would read as data missing
+    /// rather than as a deliberate "none".
+    #[test]
+    fn an_unlinked_theme_shows_a_dash() {
+        let html = Owner::new().with(|| {
+            let editing = RwSignal::new(Editing::None);
+            view! { <ThemeTable rows=vec![unlinked()] editing=editing/> }.to_html()
+        });
+
+        assert!(html.contains("—"), "no dash: {html}");
+        assert!(html.contains("Aquarelle"), "the theme still shows: {html}");
     }
 
     #[test]

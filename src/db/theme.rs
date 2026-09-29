@@ -17,6 +17,7 @@ use bson::{Binary, DateTime, doc};
 use futures_util::TryStreamExt;
 use serde::{Deserialize, Serialize};
 
+use crate::db::service::ServiceDoc;
 use crate::db::{DbError, themes};
 use crate::models::ThemeView;
 
@@ -32,6 +33,10 @@ pub struct ThemeDoc {
     pub content_type: String,
     /// When the photo last changed, which is what makes its URL unique.
     pub photo_updated_at: DateTime,
+    /// Slug of the workshop this theme belongs to, or empty when it belongs to
+    /// none. See [`ThemeSummaryDoc::service_slug`].
+    #[serde(default)]
+    pub service_slug: String,
 }
 
 /// A theme document without its photo.
@@ -44,6 +49,17 @@ pub struct ThemeSummaryDoc {
     pub id: ObjectId,
     pub name: String,
     pub photo_updated_at: DateTime,
+    /// Slug of the workshop this theme belongs to, empty when it belongs to none.
+    ///
+    /// The slug rather than the id, as sessions and bookings store it: a workshop
+    /// can be reworded without orphaning what points at it, which is why
+    /// `service::update` refuses to rewrite a slug at all.
+    ///
+    /// `#[serde(default)]` is required, not tidiness: every theme stored before
+    /// this field existed would otherwise fail to read back, and the admin listing
+    /// would go down with them.
+    #[serde(default)]
+    pub service_slug: String,
 }
 
 impl ThemeSummaryDoc {
@@ -60,11 +76,28 @@ impl ThemeSummaryDoc {
         )
     }
 
-    pub fn to_view(&self) -> ThemeView {
+    /// `service` is the workshop this theme's slug names, already looked up by the
+    /// caller -- resolved in bulk for a listing rather than one query per row, the
+    /// way `SessionDoc::to_view` takes its theme and workshop.
+    ///
+    /// Three cases, and the labels tell them apart: no slug reads as no link at
+    /// all, a slug naming nothing means the workshop was deleted under it, and
+    /// anything else is a live link.
+    pub fn to_view(&self, service: Option<&ServiceDoc>) -> ThemeView {
+        let service_label = if self.service_slug.is_empty() {
+            String::new()
+        } else {
+            service
+                .map(|found| found.label.clone())
+                .unwrap_or_else(|| "Atelier supprimé".to_owned())
+        };
+
         ThemeView {
             id: self.id.to_hex(),
             name: self.name.clone(),
             photo_url: self.photo_url(),
+            service_slug: self.service_slug.clone(),
+            service_label,
         }
     }
 }
@@ -146,13 +179,19 @@ pub async fn photo(id: ObjectId) -> Result<Option<(Vec<u8>, String)>, DbError> {
     Ok(found.map(|theme| (theme.photo.bytes, theme.content_type)))
 }
 
-pub async fn insert(name: &str, photo: Vec<u8>, content_type: &str) -> Result<ObjectId, DbError> {
+pub async fn insert(
+    name: &str,
+    service_slug: &str,
+    photo: Vec<u8>,
+    content_type: &str,
+) -> Result<ObjectId, DbError> {
     let document = ThemeDoc {
         id: None,
         name: name.to_owned(),
         photo: to_binary(photo),
         content_type: content_type.to_owned(),
         photo_updated_at: DateTime::now(),
+        service_slug: service_slug.to_owned(),
     };
 
     let inserted = themes()?.insert_one(&document).await?;
@@ -166,9 +205,11 @@ pub async fn insert(name: &str, photo: Vec<u8>, content_type: &str) -> Result<Ob
 pub async fn update(
     id: ObjectId,
     name: &str,
+    service_slug: &str,
     photo: Option<(Vec<u8>, String)>,
 ) -> Result<(), DbError> {
-    let mut fields = doc! { "name": name };
+    // Written unconditionally, empty included: that is how a link is removed.
+    let mut fields = doc! { "name": name, "service_slug": service_slug };
 
     if let Some((bytes, content_type)) = photo {
         fields.insert("photo", to_binary(bytes));
@@ -180,6 +221,14 @@ pub async fn update(
 
     themes()?.update_one(doc! { "_id": id }, doc! { "$set": fields }).await?;
     Ok(())
+}
+
+/// How many themes are attached to a workshop, to explain why deleting it is
+/// refused.
+pub async fn count_for_service(service_slug: &str) -> Result<u64, DbError> {
+    Ok(themes()?
+        .count_documents(doc! { "service_slug": service_slug })
+        .await?)
 }
 
 pub async fn delete(id: ObjectId) -> Result<(), DbError> {
@@ -195,6 +244,60 @@ fn summaries() -> Result<mongodb::Collection<ThemeSummaryDoc>, DbError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn summary(service_slug: &str) -> ThemeSummaryDoc {
+        ThemeSummaryDoc {
+            id: ObjectId::new(),
+            name: "Aquarelle".to_owned(),
+            photo_updated_at: DateTime::now(),
+            service_slug: service_slug.to_owned(),
+        }
+    }
+
+    /// Every theme stored before this field existed has no such key. Without
+    /// `#[serde(default)]` each one would fail to deserialize, and `list_all`
+    /// would take the whole admin listing down rather than one row.
+    #[test]
+    fn a_document_predating_the_workshop_link_still_reads() {
+        let legacy = doc! {
+            "_id": ObjectId::new(),
+            "name": "Aquarelle",
+            "photo_updated_at": DateTime::now(),
+        };
+
+        let theme: ThemeSummaryDoc =
+            bson::from_document(legacy).expect("a legacy theme should still deserialize");
+
+        assert_eq!(theme.service_slug, "", "and read as attached to nothing");
+    }
+
+    /// Three situations the table has to tell apart, and only the labels do it.
+    #[test]
+    fn the_view_distinguishes_no_link_from_a_dead_one() {
+        let service = crate::db::service::ServiceDoc {
+            id: None,
+            slug: "aperos-creatifs".to_owned(),
+            label: "Apéros créatifs".to_owned(),
+            description: String::new(),
+            age: String::new(),
+            steps: Vec::new(),
+            icon: String::new(),
+            pro: false,
+            position: 0,
+        };
+
+        let linked = summary("aperos-creatifs").to_view(Some(&service));
+        assert_eq!(linked.service_label, "Apéros créatifs");
+
+        // The slug is set but names nothing: the workshop was deleted under it.
+        let orphan = summary("aperos-creatifs").to_view(None);
+        assert_eq!(orphan.service_label, "Atelier supprimé");
+
+        // No slug at all, which is not the same thing and must not read as one.
+        let unlinked = summary("").to_view(None);
+        assert_eq!(unlinked.service_label, "");
+        assert_eq!(unlinked.service_slug, "");
+    }
 
     #[test]
     fn recognises_the_accepted_formats() {

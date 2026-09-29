@@ -16,9 +16,11 @@ use crate::models::{AffectedSession, ThemeView};
 /// Photos are not included; each view carries the URL to fetch one.
 #[server]
 pub async fn all_themes() -> Result<Vec<ThemeView>, ServerFnError> {
+    use std::collections::HashMap;
+
     use crate::api::log_failure;
     use crate::auth::require_admin;
-    use crate::db::theme;
+    use crate::db::{service, theme};
 
     require_admin()?;
 
@@ -26,7 +28,19 @@ pub async fn all_themes() -> Result<Vec<ThemeView>, ServerFnError> {
         .await
         .map_err(|error| log_failure("listing themes", error))?;
 
-    Ok(themes.iter().map(|found| found.to_view()).collect())
+    // One read for the lot rather than one per theme, as the sessions listing
+    // does: a table of twenty themes would otherwise be twenty extra queries.
+    let services: HashMap<_, _> = service::list_all()
+        .await
+        .map_err(|error| log_failure("naming the workshops of the themes", error))?
+        .into_iter()
+        .map(|found| (found.slug.clone(), found))
+        .collect();
+
+    Ok(themes
+        .iter()
+        .map(|found| found.to_view(services.get(&found.service_slug)))
+        .collect())
 }
 
 /// Creates a theme, or updates the one `id` points at when it is not empty.
@@ -48,6 +62,7 @@ pub async fn save_theme(data: MultipartData) -> Result<(), ServerFnError> {
 
     let mut id = String::new();
     let mut name = String::new();
+    let mut service = String::new();
     let mut photo: Vec<u8> = Vec::new();
 
     while let Some(mut field) = fields
@@ -58,16 +73,18 @@ pub async fn save_theme(data: MultipartData) -> Result<(), ServerFnError> {
         let field_name = field.name().unwrap_or_default().to_owned();
 
         match field_name.as_str() {
-            "id" | "name" => {
+            // A field missing from this arm is not a compile error: it falls
+            // through to the catch-all below and is silently dropped.
+            "id" | "name" | "service" => {
                 let text = field
                     .text()
                     .await
                     .map_err(|error| read_failure("reading a theme field", error))?;
 
-                if field_name == "id" {
-                    id = text;
-                } else {
-                    name = text;
+                match field_name.as_str() {
+                    "id" => id = text,
+                    "name" => name = text,
+                    _ => service = text,
                 }
             }
             "photo" => {
@@ -97,6 +114,19 @@ pub async fn save_theme(data: MultipartData) -> Result<(), ServerFnError> {
         return Err(ServerFnError::new("Indiquez un nom de thème."));
     }
 
+    // Empty is a legitimate answer -- the link is optional -- but a slug naming no
+    // workshop would sit in the row reading "Atelier supprimé" forever. The value
+    // comes from a picker, yet the form is an ordinary POST anyone can forge.
+    let service = service.trim();
+    if !service.is_empty()
+        && crate::db::service::find_by_slug(service)
+            .await
+            .map_err(|error| crate::api::log_failure("checking a theme's workshop", error))?
+            .is_none()
+    {
+        return Err(ServerFnError::new("Cet atelier n'existe pas."));
+    }
+
     // An untouched file input still sends an empty part, which is how "keep the
     // current photo" reaches us.
     let uploaded = if photo.is_empty() {
@@ -115,7 +145,7 @@ pub async fn save_theme(data: MultipartData) -> Result<(), ServerFnError> {
             return Err(ServerFnError::new("Choisissez une photo pour ce thème."));
         };
 
-        return theme::insert(name, bytes, &content_type)
+        return theme::insert(name, service, bytes, &content_type)
             .await
             .map(|_| ())
             .map_err(|error| duplicate_or_failure("inserting a theme", error));
@@ -124,7 +154,7 @@ pub async fn save_theme(data: MultipartData) -> Result<(), ServerFnError> {
     let theme_id =
         session::parse_id(id).map_err(|_| ServerFnError::new("Thème inconnu."))?;
 
-    theme::update(theme_id, name, uploaded)
+    theme::update(theme_id, name, service, uploaded)
         .await
         .map_err(|error| duplicate_or_failure("updating a theme", error))
 }
