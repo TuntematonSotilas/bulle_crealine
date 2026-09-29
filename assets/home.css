@@ -35,6 +35,13 @@
    at the same nominal size would tower over it -- less than half is what reads as
    "slightly smaller" beside it. */
 .home-hero-suffix {
+  /* A line of its own. `block` rather than a `<br>`: the break belongs to how this
+     note is set, not to the wording, and the rule that sizes it can carry it. */
+  display: block;
   font-family: var(--font-sans);
   font-size: 0.45em;
+  /* The title's line-height of 1.1 is tight, and the script hangs long descenders
+     below its baseline; without this they would sit almost on the note. The em is
+     the note's own, so this costs the hero about a fifth of a title line. */
+  margin-top: 0.5em;
 }

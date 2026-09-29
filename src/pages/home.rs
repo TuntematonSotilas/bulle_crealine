@@ -12,7 +12,7 @@ pub fn HomePage() -> impl IntoView {
     view! {
         <div class="home-hero border border-(--border) rounded-[2rem] shadow-(--shadow) max-w-4xl mx-auto">
             <h2 class="home-hero-title">
-                "Bulle Créaline "
+                "Bulle Créaline"
                 <span class="home-hero-suffix">"(E.I)"</span>
             </h2>
             <h3>"Ma source de créativité"</h3>

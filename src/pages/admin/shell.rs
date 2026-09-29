@@ -7,11 +7,13 @@ use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::pages::admin::easter_egg::NavSprite;
 
 /// The admin pages, and the label shown in the shell's navigation.
+/// Ordered as the work runs: a theme is created, attached to a service, put on a
+/// session, and only then booked.
 const PAGES: [(&str, &str); 5] = [
     ("/admin", "Accueil"),
+    ("/admin/themes", "Thèmes"),
     ("/admin/services", "Services"),
     ("/admin/sessions", "Séances"),
-    ("/admin/themes", "Thèmes"),
     ("/admin/bookings", "Réservations"),
 ];
 
