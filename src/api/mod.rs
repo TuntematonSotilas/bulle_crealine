@@ -5,6 +5,7 @@
 //! `/api`, which the page guard does not cover.
 
 pub mod bookings;
+pub mod service_photos;
 pub mod services;
 pub mod sessions;
 pub mod themes;

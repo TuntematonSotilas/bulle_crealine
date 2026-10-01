@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 
 use crate::components::blocks::studio_place::StudioPlace;
+use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::service_icon::ServiceIcon;
 use crate::models::ServiceView;
 
@@ -17,7 +18,11 @@ pub fn ServiceBlock(service: ServiceView) -> impl IntoView {
 
     // Left out rather than shown empty: a workshop open to everyone has no age to
     // announce, and an empty card would read as missing information.
-    let age = (!service.age.is_empty()).then(|| {
+    //
+    // And left out of a workshop run for a structure whatever it carries: the age
+    // is a condition of signing up, and there is no signing up here -- the group is
+    // whoever the structure brings.
+    let age = (bookable && !service.age.is_empty()).then(|| {
         view! {
             <div class="grid grid-cols-1 gap-4 mb-6">
                 <div class="p-4 rounded-2xl border bg-surface text-surface-foreground border-border">
@@ -41,7 +46,10 @@ pub fn ServiceBlock(service: ServiceView) -> impl IntoView {
         }
     });
 
-    let steps = (!service.steps.is_empty()).then(|| {
+    // Gated on `bookable` for the same reason as the age above: how a session
+    // unfolds is agreed with the structure, so the atelier's own run-through would
+    // be a promise made about someone else's.
+    let steps = (bookable && !service.steps.is_empty()).then(|| {
         let items = service
             .steps
             .iter()
@@ -62,6 +70,24 @@ pub fn ServiceBlock(service: ServiceView) -> impl IntoView {
             <div class="mb-6">
                 <h4 class="mb-4 text-lg font-bold text-heading">"Déroulement de l'atelier"</h4>
                 <div class="space-y-3">{items}</div>
+            </div>
+        }
+    });
+
+    // The counterpart of the schedule a bookable workshop carries below it: there
+    // is nothing to sign up for here, and agreeing on a date is a conversation.
+    let contact = (!bookable).then(|| {
+        view! {
+            // Spaced by hand: the three slots above are all empty on this page, so
+            // the button would otherwise sit flush under the description.
+            <div class="mt-2">
+                <Button
+                    variant=ButtonVariant::Secondary
+                    size=ButtonSize::Pill
+                    href="/contact"
+                >
+                    "Me contacter"
+                </Button>
             </div>
         }
     });
@@ -93,7 +119,7 @@ pub fn ServiceBlock(service: ServiceView) -> impl IntoView {
                         </p>
                     </div>
 
-                    {age} {place} {steps}
+                    {age} {place} {steps} {contact}
 
                 </div>
             </div>
@@ -180,6 +206,50 @@ mod tests {
             !block_html(service(true)).contains(STUDIO_ADDRESS),
             "a workshop for structures is not held there"
         );
+    }
+
+    /// Both rubrics answer a question nobody asks here. The age is a condition of
+    /// signing up, and there is no signing up; the run-through is the atelier's own,
+    /// where a session in a structure is agreed with that structure.
+    ///
+    /// Asserted on a workshop that *carries* both, which is what tells this gate
+    /// apart from the emptiness one below: a fixture with neither would pass either
+    /// way.
+    #[test]
+    fn a_workshop_for_structures_drops_the_age_and_the_run_through() {
+        let shown = service(true);
+        assert!(!shown.age.is_empty() && !shown.steps.is_empty(), "the fixture carries both");
+
+        let html = block_html(shown);
+
+        assert!(!html.contains("Âge requis"), "the age should not show: {html}");
+        assert!(
+            !html.contains("Déroulement de l'atelier"),
+            "nor the run-through: {html}"
+        );
+        assert!(html.contains("Apéros créatifs (adultes)"), "the name still shows: {html}");
+    }
+
+    /// There is no date to sign up for, so the page has to end somewhere: getting
+    /// in touch is the one thing left to offer.
+    #[test]
+    fn a_workshop_for_structures_offers_a_way_to_get_in_touch() {
+        let html = block_html(service(true));
+
+        assert!(html.contains("Me contacter"), "no way to get in touch: {html}");
+        assert!(html.contains(r#"href="/contact""#), "and nowhere to go: {html}");
+    }
+
+    /// The mirror of the two above. Without it an inverted gate would pass the
+    /// whole suite: every other test here either loops without asserting on these
+    /// or reads a bookable workshop only.
+    #[test]
+    fn a_bookable_workshop_keeps_its_rubrics_and_offers_no_contact() {
+        let html = block_html(service(false));
+
+        assert!(html.contains("Âge requis"), "the age belongs here: {html}");
+        assert!(html.contains("Déroulement de l'atelier"), "and the run-through: {html}");
+        assert!(!html.contains("Me contacter"), "booking is the way in here: {html}");
     }
 
     /// The fields are optional in the admin form, so a workshop may legitimately

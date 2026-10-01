@@ -3,9 +3,11 @@ use leptos::prelude::*;
 use leptos_meta::Title;
 use leptos_router::hooks::{use_params_map, use_query_map};
 
+use crate::api::service_photos::service_photos;
 use crate::api::services::all_services;
 use crate::api::sessions::upcoming_offer;
 use crate::components::blocks::service_block::ServiceBlock;
+use crate::components::blocks::service_gallery::ServiceGallery;
 use crate::components::blocks::upcoming_themes::{Showing, UpcomingThemes};
 use crate::models::group_by_theme;
 use crate::pages::not_found::NotFound;
@@ -31,6 +33,12 @@ pub fn ServicePage() -> impl IntoView {
     // a resource born while its parent suspense is already resolving misses the
     // server's render altogether, and its section never reaches the page.
     let offer = Resource::new(slug, |slug| async move { upcoming_offer(slug).await });
+
+    // The gallery of a workshop run for a structure, and the counterpart of the
+    // schedule above: one section or the other, never both. Created here for the
+    // same reason, and empty for a bookable workshop -- the server decides that,
+    // not this page.
+    let photos = Resource::new(slug, |slug| async move { service_photos(slug).await });
 
     // `?session=<id>` is how a "voir +" on the home page hands over the date that
     // was clicked. Read once: it decides where the page opens, and from then on
@@ -95,6 +103,18 @@ pub fn ServicePage() -> impl IntoView {
 
                         view! { <UpcomingThemes groups=groups showing=showing/> }
                     })
+            })}
+        </Transition>
+
+        // The third sibling, on the same terms as the second: an unknown slug and a
+        // bookable workshop both come back with no photo, and the gallery draws
+        // nothing on an empty list -- so this needs no condition of its own.
+        <Transition fallback=|| ()>
+            {move || Suspend::new(async move {
+                photos
+                    .await
+                    .ok()
+                    .map(|photos| view! { <ServiceGallery photos=photos/> })
             })}
         </Transition>
     }

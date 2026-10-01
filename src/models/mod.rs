@@ -6,6 +6,7 @@
 
 pub mod booking;
 pub mod service;
+pub mod service_photo;
 pub mod session;
 pub mod theme;
 
@@ -17,5 +18,6 @@ pub use service::{
     SERVICE_ICONS, STUDIO_ADDRESS, STUDIO_MAP_URL, ServiceView, icon_label, is_valid_slug,
     section_prefix, section_title, slugify,
 };
+pub use service_photo::{MAX_SERVICE_PHOTOS, ServicePhotoView};
 pub use session::{BookingOffer, HOME_SESSIONS, SessionView, ThemeSessions, group_by_theme};
 pub use theme::{AffectedSession, MAX_PHOTO_BYTES, MAX_PHOTO_LABEL, ThemeView};

@@ -44,8 +44,8 @@ pub async fn save_service(
 ) -> Result<(), ServerFnError> {
     use crate::auth::require_admin;
     use crate::db::service::{self, ServiceDoc};
-    use crate::db::session;
-    use crate::models::{MAX_PERSONS_PER_BOOKING, SERVICE_ICONS, is_valid_slug};
+    use crate::db::{service_photo, session};
+    use crate::models::{MAX_PERSONS_PER_BOOKING, SERVICE_ICONS, is_valid_slug, section_title};
 
     require_admin()?;
 
@@ -128,7 +128,28 @@ pub async fn save_service(
         if scheduled > 0 {
             return Err(ServerFnError::new(format!(
                 "{scheduled} séance(s) portent ce service : il ne peut pas passer en « {} » tant qu'elles existent.",
-                crate::models::section_title(true)
+                section_title(true)
+            )));
+        }
+    }
+
+    // The other direction. A gallery belongs to the section for structures alone:
+    // moving a workshop out of it would leave its photos stored, hidden from the
+    // page, and gone from the admin panel that manages them -- until a deletion
+    // swept away images their owner never got to see again. Refused instead, and
+    // without trapping anyone: the stored section is still "Autres Ateliers" at
+    // this point, so the panel is on screen and the refusal is actionable.
+    if !document.pro {
+        let photographed = service_photo::count_for_service(&document.slug)
+            .await
+            .map_err(|error| {
+                crate::api::log_failure("counting the photos of a workshop", error)
+            })?;
+
+        if photographed > 0 {
+            return Err(ServerFnError::new(format!(
+                "{photographed} photo(s) sont rattachées à ce service : supprimez-les d'abord pour le remettre en « {} ».",
+                section_title(false)
             )));
         }
     }
@@ -142,14 +163,19 @@ pub async fn save_service(
 
 /// Drops a workshop, unless sessions or themes are still filed under it.
 ///
-/// Refused rather than cascaded, like a theme: sessions and themes store the slug,
-/// and a session whose workshop is gone loses its name on the home page, in the
-/// admin table and on the booking page at once.
+/// Sessions and themes are refused rather than cascaded: both store the slug and
+/// have a life of their own, and a session whose workshop is gone loses its name on
+/// the home page, in the admin table and on the booking page at once.
+///
+/// Photos are the exception, and go with the workshop. One has no identity apart
+/// from the page it illustrates, and becomes unreachable the moment that page does:
+/// refusing would only ask the admin to empty a gallery by hand before deleting the
+/// thing the gallery was for.
 #[server]
 pub async fn delete_service(id: String) -> Result<(), ServerFnError> {
     use crate::api::log_failure;
     use crate::auth::require_admin;
-    use crate::db::{service, session, theme};
+    use crate::db::{service, service_photo, session, theme};
 
     require_admin()?;
 
@@ -182,6 +208,13 @@ pub async fn delete_service(id: String) -> Result<(), ServerFnError> {
             "{themed} thème(s) sont rattachés à ce service : détachez-les d'abord dans « Thèmes »."
         )));
     }
+
+    // Before the workshop, not after. There is no transaction here, and in this
+    // order a failure leaves the workshop standing and the admin free to try again;
+    // the other way round it would leave orphaned photos that nothing ever reaps.
+    service_photo::delete_for_service(&found.slug)
+        .await
+        .map_err(|error| log_failure("deleting the photos of a workshop", error))?;
 
     service::delete(service_id)
         .await

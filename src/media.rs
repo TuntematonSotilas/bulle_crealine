@@ -2,7 +2,8 @@
 //!
 //! Theme photos live in their document rather than on disk (see
 //! [`crate::db::theme`]), so they need a route of their own; an `<img src>` cannot
-//! call a server function.
+//! call a server function. Workshop photos live in a collection of their own (see
+//! [`crate::db::service_photo`]) and are served the same way.
 
 use actix_web::http::header;
 use actix_web::{HttpResponse, web};
@@ -36,6 +37,32 @@ pub async fn theme_photo(id: web::Path<String>) -> HttpResponse {
         Ok(None) => HttpResponse::NotFound().finish(),
         Err(error) => {
             eprintln!("serving a theme photo failed: {error}");
+            HttpResponse::ServiceUnavailable().finish()
+        }
+    }
+}
+
+/// `GET /media/service-photo/{id}` — one photo of a workshop run for a structure.
+///
+/// Public for the same reason as [`theme_photo`]: these images are meant to be
+/// shown to visitors.
+pub async fn service_photo(id: web::Path<String>) -> HttpResponse {
+    use crate::db::{service_photo, session};
+
+    let Ok(photo_id) = session::parse_id(&id) else {
+        return HttpResponse::NotFound().finish();
+    };
+
+    match service_photo::photo(photo_id).await {
+        Ok(Some((bytes, content_type))) => HttpResponse::Ok()
+            .content_type(content_type)
+            // Truthful without a stamp here, unlike a theme's: the document behind
+            // this id is never rewritten, so the bytes cannot change under it.
+            .insert_header((header::CACHE_CONTROL, "public, max-age=31536000, immutable"))
+            .body(bytes),
+        Ok(None) => HttpResponse::NotFound().finish(),
+        Err(error) => {
+            eprintln!("serving a workshop photo failed: {error}");
             HttpResponse::ServiceUnavailable().finish()
         }
     }

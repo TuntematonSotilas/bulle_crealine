@@ -54,6 +54,8 @@ async fn main() -> std::io::Result<()> {
             .service(favicon)
             // serve theme photos, which live in Mongo rather than on disk
             .route("/media/theme/{id}", web::get().to(media::theme_photo))
+            // the same, for the photos of a workshop run for a structure
+            .route("/media/service-photo/{id}", web::get().to(media::service_photo))
             // photo uploads do not fit under actix's 256 kB default body limit
             .app_data(web::PayloadConfig::new(media::MAX_BODY_BYTES))
             .leptos_routes(routes, {

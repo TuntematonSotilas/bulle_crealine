@@ -1,8 +1,10 @@
 //! Administration of the kinds of workshop, at `/admin/services`.
 //!
-//! Same shape as [`crate::pages::admin::themes`], minus the file upload: this form
-//! is plain fields, so it posts through an `<ActionForm>` and works without the
-//! WASM bundle.
+//! Same shape as [`crate::pages::admin::themes`]. The workshop itself is plain
+//! fields, so it posts through an `<ActionForm>` and works without the WASM bundle
+//! — but the photo panel beneath it carries files, which only a multipart body can
+//! do, so that one region needs JavaScript. Keeping the split means a workshop can
+//! still be created and edited with none.
 //!
 //! The one thing here that is not an ordinary CRUD screen is the slug. It is a
 //! workshop's identity -- every session and every booking is filed under it, and
@@ -12,7 +14,10 @@
 use leptos::either::{Either, EitherOf3};
 use leptos::prelude::*;
 use leptos_meta::Title;
+use wasm_bindgen::JsCast;
+use web_sys::{FormData, HtmlFormElement};
 
+use crate::api::service_photos::{DeleteServicePhoto, add_service_photo, service_photos};
 use crate::api::services::{
     DeleteService, SaveService, all_services, service_session_count,
 };
@@ -20,7 +25,7 @@ use crate::auth::user_message;
 use crate::components::ui::alert::{Alert, AlertDescription, AlertTitle, AlertVariant};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
-use crate::components::ui::input::Input;
+use crate::components::ui::input::{Input, InputType};
 use crate::components::ui::label::Label;
 use crate::components::ui::number_field::NumberField;
 use crate::components::ui::select::{
@@ -30,9 +35,16 @@ use crate::components::ui::service_icon::ServiceIcon;
 use crate::components::ui::table::*;
 use crate::components::ui::textarea::Textarea;
 use crate::models::{
-    MAX_PERSONS_PER_BOOKING, SERVICE_ICONS, ServiceView, icon_label, section_title, slugify,
+    MAX_PERSONS_PER_BOOKING, MAX_PHOTO_LABEL, MAX_SERVICE_PHOTOS, SERVICE_ICONS,
+    ServicePhotoView, ServiceView, icon_label, section_title, slugify,
 };
 use crate::pages::admin::AdminShell;
+
+/// The action posting one photo, which an `<ActionForm>` could not carry.
+///
+/// Dispatched locally rather than through a `ServerAction`: a `FormData` is neither
+/// `Send` nor `Sync`, since it only ever exists in the browser.
+type AddPhotoAction = Action<FormData, Result<(), ServerFnError>>;
 
 /// What the admin is doing to the workshop list right now.
 #[derive(Clone, Debug, PartialEq)]
@@ -277,6 +289,10 @@ fn ServiceForm(
     let icon_wording = icon_label(&icon).unwrap_or("Aucun").to_owned();
 
     let pro = existing.as_ref().is_some_and(|s| s.pro);
+    // Taken now because `slug` is moved into the form below, and the photo panel
+    // sits after it. The *stored* section decides whether that panel shows, not the
+    // dropdown: there has to be a saved workshop to file photos under.
+    let photographed = slug.clone();
     // Bound rather than written inline: `if … {} else {}.to_string()` reads as a
     // method on the `else` block at a glance, which is not what it means.
     let pro_value = if pro { "oui" } else { "non" };
@@ -551,9 +567,167 @@ fn ServiceForm(
                         </div>
                     </div>
                 </ActionForm>
+
+                // Outside the `<ActionForm>` above, and that is load-bearing: HTML
+                // forbids nested forms, and a browser drops the inner one while
+                // parsing rather than complaining -- the upload would then post the
+                // outer form's urlencoded body, without the file.
+                {(editing_existing && pro)
+                    .then(|| view! { <ServicePhotos slug=photographed/> })}
             </CardContent>
         </Card>
     }
+}
+
+/// The gallery of a workshop run for a structure: what is already there, and the
+/// way to add one more.
+///
+/// Only reachable on a saved workshop — a photo is filed under the slug, so there
+/// is nothing to attach one to before the first save.
+///
+/// Unlike the form above, this needs the WASM bundle: a photo cannot travel through
+/// the urlencoded body an `<ActionForm>` builds, so the upload is a hand-rolled
+/// `<form>` whose submit builds a `FormData`, as in [`crate::pages::admin::themes`].
+#[component]
+fn ServicePhotos(slug: String) -> impl IntoView {
+    let add: AddPhotoAction = Action::new_local(|data: &FormData| {
+        let data = data.clone();
+        add_service_photo(data.into())
+    });
+    let delete = ServerAction::<DeleteServicePhoto>::new();
+
+    let for_resource = slug.clone();
+    let photos = Resource::new(
+        move || (for_resource.clone(), add.version().get(), delete.version().get()),
+        |(slug, _, _)| async move { service_photos(slug).await },
+    );
+
+    let submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+
+        let Some(form) = ev
+            .target()
+            .and_then(|target| target.dyn_into::<HtmlFormElement>().ok())
+        else {
+            return;
+        };
+        if let Ok(data) = FormData::new_with_form(&form) {
+            add.dispatch_local(data);
+        }
+    };
+
+    let pending = add.pending();
+    let failure = move || {
+        add.value()
+            .get()
+            .and_then(|outcome| outcome.err())
+            .or_else(|| delete.value().get().and_then(|outcome| outcome.err()))
+            .map(|error| user_message(&error))
+    };
+
+    view! {
+        <div class="pt-6 mt-8 border-t border-border">
+            <h3 class="text-lg font-semibold">"Photos de l'atelier"</h3>
+            <p class="mt-1 mb-4 text-sm text-muted-foreground">
+                {format!(
+                    "{MAX_SERVICE_PHOTOS} au maximum, dans l'ordre où elles sont ajoutées. Elles s'affichent sur la page de l'atelier.",
+                )}
+            </p>
+
+            <Transition fallback=|| {
+                view! { <p class="text-sm text-muted-foreground">"Chargement…"</p> }
+            }>
+                {move || Suspend::new(async move {
+                    photos
+                        .await
+                        .ok()
+                        .map(|list| view! { <PhotoGrid photos=list action=delete/> })
+                })}
+            </Transition>
+
+            <form on:submit=submit class="flex flex-wrap gap-3 items-end mt-4">
+                <input type="hidden" name="service" value=slug/>
+
+                <div class="grid gap-3">
+                    // Not `id="photo"`: the main form shares this document, and two
+                    // controls under one id would send a `<label for>` to whichever
+                    // came first.
+                    <Label r#for="service-photo">"Ajouter une photo"</Label>
+                    <Input
+                        r#type=InputType::File
+                        id="service-photo"
+                        name="photo"
+                        required=true
+                        attr:accept="image/png,image/jpeg,image/webp"
+                    />
+                </div>
+
+                <Button attr:disabled=move || pending.get()>
+                    {move || if pending.get() { "Envoi…" } else { "Ajouter" }}
+                </Button>
+            </form>
+
+            <p class="mt-2 text-sm text-muted-foreground">
+                {format!("PNG, JPEG ou WebP, {MAX_PHOTO_LABEL} au maximum.")}
+            </p>
+
+            {move || {
+                failure()
+                    .map(|message| {
+                        view! {
+                            <Alert variant=AlertVariant::Destructive class="mt-4">
+                                {message}
+                            </Alert>
+                        }
+                    })
+            }}
+        </div>
+    }
+}
+
+/// The photos already stored, each with a way to drop it.
+#[component]
+fn PhotoGrid(photos: Vec<ServicePhotoView>, action: ServerAction<DeleteServicePhoto>) -> impl IntoView {
+    if photos.is_empty() {
+        return Either::Left(view! {
+            <p class="text-sm text-muted-foreground">"Aucune photo pour le moment."</p>
+        });
+    }
+
+    let tiles = photos
+        .into_iter()
+        .map(|photo| {
+            let id = photo.id.clone();
+
+            view! {
+                <li class="flex flex-col gap-2">
+                    <img
+                        src=photo.url
+                        alt=photo.alt
+                        loading="lazy"
+                        class="object-cover w-full rounded-md border aspect-16/9"
+                    />
+                    // Dispatched rather than posted through an `<ActionForm>`: one
+                    // form per tile would be five more forms in this document, and
+                    // the upload above already makes this panel need JavaScript.
+                    <Button
+                        variant=ButtonVariant::Destructive
+                        size=ButtonSize::Sm
+                        attr:r#type="button"
+                        on:click=move |_| {
+                            action.dispatch(DeleteServicePhoto { id: id.clone() });
+                        }
+                    >
+                        "Supprimer"
+                    </Button>
+                </li>
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Either::Right(view! {
+        <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{tiles}</ul>
+    })
 }
 
 /// Confirmation asked before a workshop is dropped.
@@ -569,6 +743,9 @@ fn DeleteConfirmation(
 ) -> impl IntoView {
     let id = service.id.clone();
     let for_resource = service.id.clone();
+    // Photos go with the workshop rather than blocking its deletion, so this is the
+    // last screen on which the admin can still change their mind about them.
+    let photographed = service.pro;
 
     let sessions = Resource::new(
         move || for_resource.clone(),
@@ -581,6 +758,17 @@ fn DeleteConfirmation(
                 <CardTitle>"Supprimer ce service ?"</CardTitle>
                 <CardDescription>{service.label.clone()}</CardDescription>
             </CardHeader>
+
+            {photographed
+                .then(|| {
+                    view! {
+                        <CardContent>
+                            <Alert variant=AlertVariant::Destructive>
+                                "Ses photos seront supprimées avec lui."
+                            </Alert>
+                        </CardContent>
+                    }
+                })}
 
             <CardContent>
                 <Transition fallback=|| ()>
@@ -721,8 +909,20 @@ mod tests {
         }
     }
 
+    /// The same workshop, in the section run for structures: the one that carries
+    /// a gallery.
+    fn for_structures() -> ServiceView {
+        ServiceView {
+            slug: "en-institution".to_owned(),
+            label: "Ateliers en institution".to_owned(),
+            pro: true,
+            ..service()
+        }
+    }
+
     fn form_html(service: Option<ServiceView>) -> String {
-        // The impact warning owns a `Resource`, and so does nothing else here.
+        // Two components own a `Resource` here: the impact warning, and the photo
+        // panel on a workshop run for a structure.
         crate::pages::admin::init_test_executor();
 
         Owner::new().with(|| {
@@ -885,5 +1085,55 @@ mod tests {
 
         assert!(html.contains("3 séance(s)"), "the count should show: {html}");
         assert!(html.contains("suppression est impossible"), "and the consequence: {html}");
+    }
+
+    /// The gallery is what these pages are for now, so the panel has to be there.
+    #[test]
+    fn an_edit_of_a_workshop_for_structures_offers_its_photos() {
+        let html = form_html(Some(for_structures()));
+
+        assert!(html.contains("Photos de l'atelier"), "no panel: {html}");
+        assert!(html.contains(r#"type="file""#), "no way to add one: {html}");
+        assert!(
+            html.contains(&MAX_SERVICE_PHOTOS.to_string()),
+            "the cap should be written out: {html}"
+        );
+    }
+
+    /// A bookable workshop shows its dates, not a gallery, and the server would
+    /// turn a photo filed under it away.
+    #[test]
+    fn an_edit_of_a_bookable_workshop_offers_no_photos() {
+        let html = form_html(Some(service()));
+
+        assert!(!html.contains("Photos de l'atelier"), "no gallery here: {html}");
+        assert!(!html.contains(r#"type="file""#), "and nothing to upload: {html}");
+    }
+
+    /// A photo is filed under a slug, and a creation has not got one yet.
+    #[test]
+    fn a_creation_offers_no_photos() {
+        let html = form_html(None);
+
+        assert!(!html.contains("Photos de l'atelier"), "nothing to attach them to: {html}");
+    }
+
+    /// HTML forbids nested forms, and a browser drops the inner one while parsing
+    /// rather than complaining: the upload would silently post the outer form's
+    /// urlencoded body, without the file. No other test would see it, so this one
+    /// reads the rendered string for the nesting itself.
+    #[test]
+    fn the_upload_form_is_not_nested_in_the_one_above_it() {
+        let html = form_html(Some(for_structures()));
+
+        let opens: Vec<_> = html.match_indices("<form").map(|(at, _)| at).collect();
+        let closes: Vec<_> = html.match_indices("</form>").map(|(at, _)| at).collect();
+
+        assert_eq!(opens.len(), 2, "the workshop form and the upload: {html}");
+        assert_eq!(closes.len(), 2, "both should close: {html}");
+        assert!(
+            closes[0] < opens[1],
+            "the upload opens before the form above it closes: {html}"
+        );
     }
 }
