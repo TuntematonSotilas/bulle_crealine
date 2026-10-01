@@ -119,6 +119,15 @@ pub async fn save_session(
             "Une séance doit accepter au moins une personne.",
         ));
     }
+    // Read before `service.slug` is moved into the document below. A session too
+    // small for the smallest booking its workshop allows would be born full, while
+    // the admin table showed a reassuring "0 / 1".
+    if max_persons < service.min_persons {
+        return Err(ServerFnError::new(format!(
+            "Cet atelier se réserve à partir de {} personnes : une séance ne peut pas en accepter moins.",
+            service.min_persons
+        )));
+    }
 
     let document = SessionDoc {
         id: None,

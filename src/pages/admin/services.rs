@@ -29,7 +29,9 @@ use crate::components::ui::select::{
 use crate::components::ui::service_icon::ServiceIcon;
 use crate::components::ui::table::*;
 use crate::components::ui::textarea::Textarea;
-use crate::models::{SERVICE_ICONS, ServiceView, icon_label, section_title, slugify};
+use crate::models::{
+    MAX_PERSONS_PER_BOOKING, SERVICE_ICONS, ServiceView, icon_label, section_title, slugify,
+};
 use crate::pages::admin::AdminShell;
 
 /// What the admin is doing to the workshop list right now.
@@ -266,6 +268,10 @@ fn ServiceForm(
         .map(|s| s.steps.join("\n"))
         .unwrap_or_default();
     let position = service.as_ref().map(|s| f64::from(s.position)).unwrap_or(0.0);
+    // One, not the zero `position` falls back to: a creation would otherwise open
+    // on `value="0"` under a `min="1"`, which the browser turns down on submit
+    // with a native message that says nothing about what is wrong.
+    let min_persons = service.as_ref().map(|s| f64::from(s.min_persons)).unwrap_or(1.0);
 
     let icon = service.as_ref().map(|s| s.icon.clone()).unwrap_or_default();
     let icon_wording = icon_label(&icon).unwrap_or("Aucun").to_owned();
@@ -466,6 +472,23 @@ fn ServiceForm(
                                     attr:value=age
                                     attr:placeholder="De 0 à 6 ans"
                                 />
+                            </div>
+
+                            <div class="grid gap-3">
+                                <Label r#for="min_persons">
+                                    "Participants minimum par réservation"
+                                </Label>
+                                <NumberField
+                                    id="min_persons"
+                                    name="min_persons"
+                                    min=1.0
+                                    max=f64::from(MAX_PERSONS_PER_BOOKING)
+                                    required=true
+                                    value=min_persons
+                                />
+                                <p class="text-sm text-muted-foreground">
+                                    "1 pour une réservation à l'unité, 2 pour un atelier qui se réserve en binôme."
+                                </p>
                             </div>
 
                             <div class="grid gap-3">
@@ -694,6 +717,7 @@ mod tests {
             icon: "Wine".to_owned(),
             pro: false,
             position: 2,
+            min_persons: 3,
         }
     }
 
@@ -755,6 +779,28 @@ mod tests {
         // One per line, which is how the server reads them back.
         assert!(html.contains("Accueil\nRéalisation"), "no run-through: {html}");
         assert!(html.contains(r#"value="2""#), "no rank: {html}");
+        // Three, which nothing else on this form renders: a value shared with the
+        // rank would let this assertion pass on the wrong field.
+        assert!(html.contains(r#"value="3""#), "no smallest party: {html}");
+    }
+
+    /// Most workshops take anyone, and a creation that opened on zero under a
+    /// `min="1"` would be turned down by the browser with a native message saying
+    /// nothing about which field is wrong.
+    #[test]
+    fn a_creation_offers_the_smallest_party_and_starts_at_one() {
+        let html = form_html(None);
+
+        assert!(html.contains("Participants minimum"), "no such field: {html}");
+        assert!(html.contains("en binôme"), "what it is for should be said: {html}");
+
+        let field = html
+            .split('<')
+            .find(|element| element.starts_with("input") && element.contains(r#"id="min_persons""#))
+            .unwrap_or_else(|| panic!("the field should render: {html}"));
+
+        assert!(field.contains(r#"value="1""#), "it should start at one: {field}");
+        assert!(field.contains(r#"min="1""#), "and never go below: {field}");
     }
 
     /// The picker is the only place the icon names are offered, and a name it does

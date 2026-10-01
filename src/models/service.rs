@@ -36,6 +36,11 @@ pub struct ServiceView {
     pub pro: bool,
     /// Rank inside its section; ties fall back to the label.
     pub position: i32,
+    /// Smallest party a single booking may declare, never below one.
+    ///
+    /// Two on the parents-and-children workshops, which are attended in pairs. One
+    /// everywhere else, where it constrains nothing.
+    pub min_persons: u32,
 }
 
 impl ServiceView {
@@ -197,6 +202,7 @@ mod tests {
             icon: "Wine".to_owned(),
             pro,
             position: 0,
+            min_persons: 1,
         }
     }
 

@@ -50,6 +50,12 @@ pub struct SessionView {
     pub max_persons: u32,
     /// How many people are already booked, summed over every booking.
     pub booked_persons: u32,
+    /// Smallest party its workshop takes, carried along so a page can tell a
+    /// session that is full apart from one that merely has too little left.
+    ///
+    /// Never zero, a session whose workshop is gone reading one: every use is a
+    /// `remaining < min_persons`, and no `u32` is below zero.
+    pub min_persons: u32,
 }
 
 /// What the booking page shows, fetched in one round trip.
@@ -109,15 +115,24 @@ impl SessionView {
         self.max_persons.saturating_sub(self.booked_persons)
     }
 
-    /// Whether the session can still take anyone.
+    /// Whether the session can still take a booking.
+    ///
+    /// What is left is measured against the smallest party the workshop allows,
+    /// not against zero: one place on a workshop attended in pairs is a place
+    /// nobody can take, and offering it would send the visitor to a refusal.
     pub fn is_full(&self) -> bool {
-        self.remaining_places() == 0
+        self.remaining_places() < self.min_persons
     }
 
     /// Sentence describing what is left, for display next to the session.
     pub fn availability_label(&self) -> String {
+        // Asked of `is_full` rather than of the count, so the sentence and the
+        // button can never disagree about the same session.
+        if self.is_full() {
+            return "Complet".to_owned();
+        }
+
         match self.remaining_places() {
-            0 => "Complet".to_owned(),
             1 => "1 place restante".to_owned(),
             remaining => format!("{remaining} places restantes"),
         }
@@ -153,6 +168,7 @@ mod tests {
             price: 65.0,
             max_persons,
             booked_persons,
+            min_persons: 1,
         }
     }
 
@@ -185,6 +201,34 @@ mod tests {
         assert_eq!(session(8, 8).availability_label(), "Complet");
         assert_eq!(session(8, 7).availability_label(), "1 place restante");
         assert_eq!(session(8, 5).availability_label(), "3 places restantes");
+    }
+
+    /// The same session, on a workshop attended in pairs.
+    fn in_pairs(max_persons: u32, booked_persons: u32) -> SessionView {
+        SessionView { min_persons: 2, ..session(max_persons, booked_persons) }
+    }
+
+    /// One place on a workshop attended in pairs is a place nobody can take, and
+    /// offering it would send the visitor to a refusal.
+    ///
+    /// This is also the only test that would notice `min_persons` regressing to
+    /// zero: `remaining < 0` is false for every `u32`, so a zero would not relax
+    /// the rule but switch it off.
+    #[test]
+    fn a_place_too_few_for_a_pair_reads_as_full() {
+        let session = in_pairs(8, 7);
+
+        assert_eq!(session.remaining_places(), 1, "there is a place left");
+        assert!(session.is_full(), "but no booking could take it");
+        assert_eq!(session.availability_label(), "Complet");
+    }
+
+    /// Only the last place is withheld: a pair still fits in two, and in three.
+    #[test]
+    fn a_pair_workshop_stays_open_while_a_pair_fits() {
+        assert!(!in_pairs(8, 6).is_full());
+        assert_eq!(in_pairs(8, 6).availability_label(), "2 places restantes");
+        assert_eq!(in_pairs(8, 5).availability_label(), "3 places restantes");
     }
 
     #[test]

@@ -403,6 +403,7 @@ mod tests {
             icon: icon.to_owned(),
             pro,
             position: 0,
+            min_persons: 1,
         }
     }
 

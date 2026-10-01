@@ -21,7 +21,7 @@ pub async fn create_booking(
 
     use crate::api::log_failure;
     use crate::db::booking::{self, BookingDoc};
-    use crate::db::{DbError, datetime, session};
+    use crate::db::{DbError, datetime, service, session};
     use crate::models::{BookingRequest, phone_key};
 
     let request = BookingRequest {
@@ -46,6 +46,15 @@ pub async fn create_booking(
         .map_err(|error| log_failure("loading a session for a booking", error))?
         .ok_or_else(|| ServerFnError::new("Cette séance n'est plus proposée."))?;
 
+    // The smallest party this workshop takes. Read off the document rather than
+    // off its view, which would clone a label, a description and a list of steps
+    // to reach one integer. A workshop gone missing asks for one, which is no
+    // constraint -- and never zero, since every use below is a `< minimum`.
+    let minimum = service::find_by_slug(&session.service_type)
+        .await
+        .map_err(|error| log_failure("loading a workshop before a booking", error))?
+        .map_or(1, |found| found.min_persons);
+
     // Capacity is counted in people, not in bookings: three parties of two fill
     // six of the eight places.
     let booked = booking::booked_persons(session_id)
@@ -55,6 +64,18 @@ pub async fn create_booking(
 
     if remaining == 0 {
         return Err(ServerFnError::new("Cette séance est complète."));
+    }
+    // Said apart from "complète", which would be untrue: there are places left,
+    // they are just fewer than the smallest booking this workshop accepts.
+    if remaining < minimum {
+        return Err(ServerFnError::new(
+            "Il ne reste pas assez de places sur cette séance.",
+        ));
+    }
+    if request.persons < minimum {
+        return Err(ServerFnError::new(format!(
+            "Cet atelier se réserve à partir de {minimum} personnes."
+        )));
     }
     if request.persons > remaining {
         return Err(ServerFnError::new(match remaining {

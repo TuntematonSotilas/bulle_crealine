@@ -161,6 +161,7 @@ mod tests {
             price: 65.0,
             max_persons: 8,
             booked_persons,
+            min_persons: 1,
         }
     }
 

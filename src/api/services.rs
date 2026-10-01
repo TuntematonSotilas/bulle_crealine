@@ -40,11 +40,12 @@ pub async fn save_service(
     pro: String,
     steps: String,
     position: i32,
+    min_persons: u32,
 ) -> Result<(), ServerFnError> {
     use crate::auth::require_admin;
     use crate::db::service::{self, ServiceDoc};
     use crate::db::session;
-    use crate::models::{SERVICE_ICONS, is_valid_slug};
+    use crate::models::{MAX_PERSONS_PER_BOOKING, SERVICE_ICONS, is_valid_slug};
 
     require_admin()?;
 
@@ -65,6 +66,14 @@ pub async fn save_service(
         return Err(ServerFnError::new("Ce picto n'existe pas."));
     }
 
+    // A minimum above what a single booking may ever declare would leave the
+    // workshop impossible to book at all, by a rule meant only to raise the floor.
+    if min_persons > MAX_PERSONS_PER_BOOKING {
+        return Err(ServerFnError::new(format!(
+            "Le minimum ne peut pas dépasser {MAX_PERSONS_PER_BOOKING} personnes."
+        )));
+    }
+
     let steps: Vec<String> = steps
         .lines()
         .map(str::trim)
@@ -82,6 +91,11 @@ pub async fn save_service(
         icon: icon.to_owned(),
         pro: pro.trim() == "oui",
         position,
+        // Floored rather than refused: zero is what a form posts when it means
+        // "no minimum", and one is that same thing said in the unit the rest of
+        // the code reads. Never stored as zero -- every use is a comparison
+        // against a `u32`, which can never fall below it.
+        min_persons: min_persons.max(1),
     };
 
     let id = id.trim();

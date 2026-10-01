@@ -44,6 +44,22 @@ pub struct ServiceDoc {
     pub pro: bool,
     #[serde(default)]
     pub position: i32,
+    /// Smallest party a single booking may declare on this workshop.
+    ///
+    /// Two for the parents-and-children workshops, which are attended in pairs;
+    /// one everywhere else, which is no constraint at all.
+    #[serde(default = "one_person")]
+    pub min_persons: u32,
+}
+
+/// What a workshop predating [`ServiceDoc::min_persons`] asks for.
+///
+/// One rather than the zero `u32::default()` would give, and the distinction
+/// matters more than it looks: the minimum is always read as `remaining < minimum`,
+/// and no `u32` is ever below zero. A document defaulting to zero would not relax
+/// the rule, it would switch off every guard built on it.
+fn one_person() -> u32 {
+    1
 }
 
 impl ServiceDoc {
@@ -58,6 +74,7 @@ impl ServiceDoc {
             icon: self.icon.clone(),
             pro: self.pro,
             position: self.position,
+            min_persons: self.min_persons,
         }
     }
 }
@@ -112,6 +129,7 @@ pub async fn update(id: ObjectId, service: &ServiceDoc) -> Result<(), DbError> {
             "icon": &service.icon,
             "pro": service.pro,
             "position": service.position,
+            "min_persons": service.min_persons,
         }
     };
 
@@ -191,7 +209,13 @@ fn default_services() -> Vec<ServiceDoc> {
                                    commune, favorisant un temps de partage loin des impératifs \
                                    quotidiens.";
 
-    let bookable = |slug: &str, label: &str, description: &str, age: &str, icon: &str, position| {
+    let bookable = |slug: &str,
+                    label: &str,
+                    description: &str,
+                    age: &str,
+                    icon: &str,
+                    position,
+                    min_persons| {
         ServiceDoc {
             id: None,
             slug: slug.to_owned(),
@@ -202,6 +226,7 @@ fn default_services() -> Vec<ServiceDoc> {
             icon: icon.to_owned(),
             pro: false,
             position,
+            min_persons,
         }
     };
 
@@ -217,6 +242,9 @@ fn default_services() -> Vec<ServiceDoc> {
         icon: icon.to_owned(),
         pro: true,
         position,
+        // Never booked online, so the smallest party is a figure with nothing to
+        // act on. One is the value that constrains nothing.
+        min_persons: 1,
     };
 
     vec![
@@ -227,6 +255,8 @@ fn default_services() -> Vec<ServiceDoc> {
             "De 0 à 6 ans",
             "Baby",
             0,
+            // Attended in pairs: an adult and the child they come with.
+            2,
         ),
         bookable(
             "parents-enfants-six-a-douze",
@@ -235,6 +265,7 @@ fn default_services() -> Vec<ServiceDoc> {
             "De 6 à 12 ans",
             "Users",
             1,
+            2,
         ),
         bookable(
             "aperos-creatifs",
@@ -244,6 +275,7 @@ fn default_services() -> Vec<ServiceDoc> {
             "À partir de 18 ans",
             "Wine",
             2,
+            1,
         ),
         bookable(
             "apres-midis-creatifs",
@@ -252,6 +284,7 @@ fn default_services() -> Vec<ServiceDoc> {
             "À partir de 13 ans",
             "Palette",
             3,
+            1,
         ),
         pro(
             "en-institution",
@@ -326,6 +359,48 @@ mod tests {
                 service.slug,
                 service.icon
             );
+        }
+    }
+
+    /// The collection predates the field, so most stored workshops have no such
+    /// key. Reading one back as zero would not mean "no minimum": every use is a
+    /// `remaining < min_persons`, which no `u32` ever satisfies, so the guards
+    /// would be off rather than relaxed.
+    #[test]
+    fn a_workshop_predating_the_minimum_asks_for_one_person() {
+        let legacy = doc! {
+            "_id": ObjectId::new(),
+            "slug": "aperos-creatifs",
+            "label": "Apéros créatifs",
+        };
+
+        let service: ServiceDoc =
+            bson::from_document(legacy).expect("a legacy workshop should still deserialize");
+
+        assert_eq!(service.min_persons, 1, "a missing minimum must read as one");
+    }
+
+    /// The two workshops attended in pairs are the reason the field exists; every
+    /// other workshop has to be left unconstrained.
+    #[test]
+    fn the_seed_asks_for_two_people_on_the_parent_and_child_workshops() {
+        for service in default_services() {
+            let expected = if service.slug.starts_with("parents-enfants") { 2 } else { 1 };
+
+            assert_eq!(
+                service.min_persons, expected,
+                "{} asks for the wrong smallest party",
+                service.slug
+            );
+        }
+    }
+
+    /// Zero is the one value that would switch the guards off rather than lift
+    /// them, so no seeded row may carry it.
+    #[test]
+    fn no_seeded_workshop_asks_for_nobody() {
+        for service in default_services() {
+            assert!(service.min_persons >= 1, "{} asks for nobody", service.slug);
         }
     }
 

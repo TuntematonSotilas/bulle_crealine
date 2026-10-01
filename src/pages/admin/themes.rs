@@ -887,6 +887,7 @@ mod tests {
             icon: String::new(),
             pro,
             position: 0,
+            min_persons: 1,
         }
     }
 

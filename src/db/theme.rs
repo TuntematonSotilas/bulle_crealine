@@ -284,6 +284,7 @@ mod tests {
             icon: String::new(),
             pro: false,
             position: 0,
+            min_persons: 1,
         };
 
         let linked = summary("aperos-creatifs").to_view(Some(&service));

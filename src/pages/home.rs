@@ -96,6 +96,7 @@ mod tests {
                 price: 65.0,
                 max_persons: 8,
                 booked_persons: 0,
+                min_persons: 1,
             })
             .collect()
     }

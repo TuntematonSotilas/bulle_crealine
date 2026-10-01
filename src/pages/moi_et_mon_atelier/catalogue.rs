@@ -133,6 +133,7 @@ mod tests {
             icon: "Palette".to_owned(),
             pro,
             position,
+            min_persons: 1,
         }
     }
 

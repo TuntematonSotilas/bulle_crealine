@@ -70,6 +70,10 @@ impl SessionDoc {
             price: self.price,
             max_persons: self.max_persons,
             booked_persons,
+            // One, not zero, when the workshop is gone: the minimum is read as
+            // `remaining < min_persons`, so a zero would not relax the rule but
+            // switch off every guard standing on it.
+            min_persons: service.map_or(1, |found| found.min_persons),
         }
     }
 }
