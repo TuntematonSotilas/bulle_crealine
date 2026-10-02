@@ -3,6 +3,7 @@ pub mod footer_block;
 pub mod service_block;
 pub mod service_gallery;
 pub mod session_card;
+pub mod session_list;
 pub mod studio_place;
 pub mod upcoming_themes;
 

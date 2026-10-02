@@ -3,18 +3,23 @@ use leptos::prelude::*;
 use crate::api::sessions::next_sessions;
 use crate::components::blocks::SessionCard;
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
-use crate::models::{HOME_SESSIONS, SessionView};
+use crate::models::{HOME_CARDS, SessionGroup};
 
 /// Renders the home page of your application.
 #[component]
 pub fn HomePage() -> impl IntoView {
-    // How many the visitor has asked for so far. It drives the resource, so each
-    // click is a fresh round trip rather than a reveal out of something already in
-    // hand -- the page is paid for by every visitor, most of whom never click.
-    let shown = RwSignal::new(HOME_SESSIONS);
+    // How many cards the visitor has asked for so far. It drives the resource, so
+    // each click is a fresh round trip rather than a reveal out of something already
+    // in hand -- the page is paid for by every visitor, most of whom never click.
+    let shown = RwSignal::new(HOME_CARDS);
 
+    // The ask travels back with the answer. The page cannot infer it from the number
+    // of cards on screen: the server may legitimately answer a batch of six with
+    // fewer cards and still say more follow, since one workshop running one theme
+    // weekly fills a whole window and collapses into a single card. Comparing counts
+    // would read that as a request in flight and leave the button disabled for good.
     let sessions = Resource::new(move || shown.get(), |count| async move {
-        next_sessions(count).await
+        next_sessions(count).await.map(|page| (count, page))
     });
 
     view! {
@@ -46,12 +51,13 @@ pub fn HomePage() -> impl IntoView {
                 sessions
                     .await
                     .ok()
-                    .filter(|page| !page.sessions.is_empty())
-                    .map(|page| {
+                    .filter(|(_, page)| !page.groups.is_empty())
+                    .map(|(answered, page)| {
                         view! {
                             <UpcomingSessions
-                                sessions=page.sessions
+                                groups=page.groups
                                 more=page.more
+                                waiting=Signal::derive(move || shown.get() > answered)
                                 shown=shown
                             />
                         }
@@ -63,26 +69,24 @@ pub fn HomePage() -> impl IntoView {
 
 /// One grid of cards, every kind of workshop mixed together, soonest date first.
 ///
-/// `sessions` arrives already ordered and already capped by the server, so this
-/// neither sorts nor truncates: the order on screen is the order it was given.
+/// `groups` arrives already ordered, already capped and already trimmed by the
+/// server, so this neither sorts nor truncates: the order on screen is the order it
+/// was given.
 ///
-/// `shown` is a prop rather than a signal born here, on the model of
-/// [`crate::components::blocks::upcoming_themes::UpcomingThemes`]: it lets a test
-/// render the waiting state, which a signal owned inside would put out of reach.
+/// `waiting` and `shown` are props rather than state born here, on the model of
+/// [`crate::components::blocks::upcoming_themes::UpcomingThemes`]: they let a test
+/// render each state, which a signal owned inside would put out of reach. `shown`
+/// is here for the click alone -- it counts cards, and the button adds a batch to it.
 #[component]
-fn UpcomingSessions(sessions: Vec<SessionView>, more: bool, shown: RwSignal<usize>) -> impl IntoView {
-    // How many are on screen right now. While the server answers a larger ask, the
-    // transition above keeps this render standing, so `shown` runs ahead of it --
-    // which is exactly the fact that the button is waiting on something.
-    //
-    // It cannot run ahead for any other reason: a batch that came back short is a
-    // batch with nothing after it, and then `more` is false and no button shows.
-    let rendered = sessions.len();
-    let waiting = move || shown.get() > rendered;
-
-    let cards = sessions
+fn UpcomingSessions(
+    groups: Vec<SessionGroup>,
+    more: bool,
+    #[prop(into)] waiting: Signal<bool>,
+    shown: RwSignal<usize>,
+) -> impl IntoView {
+    let cards = groups
         .into_iter()
-        .map(|session| view! { <SessionCard session=session/> })
+        .map(|group| view! { <SessionCard group=group/> })
         .collect::<Vec<_>>();
 
     // Only while the server says something follows. A button that stays and does
@@ -95,12 +99,12 @@ fn UpcomingSessions(sessions: Vec<SessionView>, more: bool, shown: RwSignal<usiz
                     size=ButtonSize::Pill
                     attr:r#type="button"
                     attr:disabled=waiting
-                    on:click=move |_| shown.update(|count| *count += HOME_SESSIONS)
+                    on:click=move |_| shown.update(|count| *count += HOME_CARDS)
                 >
                     // The wording changes rather than a spinner appearing beside
                     // it: the wait is one round trip, and a button that renames
                     // itself says the click landed without the layout shifting.
-                    {move || if waiting() { "Chargement…" } else { "Voir plus de séances" }}
+                    {move || if waiting.get() { "Chargement…" } else { "Voir plus de séances" }}
                 </Button>
             </div>
         }
@@ -122,9 +126,11 @@ fn UpcomingSessions(sessions: Vec<SessionView>, more: bool, shown: RwSignal<usiz
     }
 }
 
+
 #[cfg(all(test, feature = "ssr"))]
 mod tests {
     use super::*;
+    use crate::models::{SessionView, group_by_service_and_theme};
 
     /// Workshops the seed ships with, named here the way the server hands them
     /// over: resolved onto the view, not derived from anything the page knows.
@@ -136,31 +142,6 @@ mod tests {
     /// apart from the "voir +" each card carries towards its workshop's page.
     const MORE: &str = "Voir plus de séances";
 
-    /// One session per given workshop, each carrying a date label of its own so
-    /// the cards can be told apart in the rendered markup.
-    fn sessions(labels: &[&str]) -> Vec<SessionView> {
-        labels
-            .iter()
-            .enumerate()
-            .map(|(rank, label)| SessionView {
-                id: format!("651d1f0a00000000000000{rank:02}"),
-                service_slug: format!("atelier-{rank}"),
-                service_label: (*label).to_owned(),
-                service_description: format!("Description de {label}."),
-                service_path: format!("/services/atelier-{rank}"),
-                date_label: format!("séance {rank}"),
-                date_input: "2026-07-05T14:00".to_owned(),
-                theme_id: "651d1f0a0000000000000099".to_owned(),
-                theme_name: "Aquarelle".to_owned(),
-                photo_url: "/media/theme/651d1f0a0000000000000099?v=1".to_owned(),
-                price: 65.0,
-                max_persons: 8,
-                booked_persons: 0,
-                min_persons: 1,
-            })
-            .collect()
-    }
-
     /// Whether the button carries the `disabled` attribute.
     ///
     /// Told apart from the classes rather than merely searched for: every button
@@ -171,43 +152,73 @@ mod tests {
         html.contains(" disabled ")
     }
 
-    /// Renders the grid as it stands once a batch has arrived: `shown` matches
-    /// what is on screen, so nothing is waiting.
-    fn sections_html(sessions: Vec<SessionView>) -> String {
-        let shown = sessions.len();
+    /// One card per given workshop, each on a theme of its own and carrying a date
+    /// label of its own, so the cards can be told apart in the rendered markup.
+    ///
+    /// Built through the real grouping rather than by hand: a fixture that assembled
+    /// a `SessionGroup` itself could describe a card the server never makes.
+    fn cards(labels: &[&str]) -> Vec<SessionGroup> {
+        labels
+            .iter()
+            .enumerate()
+            .map(|(rank, label)| {
+                group_by_service_and_theme(vec![SessionView {
+                    id: format!("651d1f0a00000000000000{rank:02}"),
+                    service_slug: format!("atelier-{rank}"),
+                    service_label: (*label).to_owned(),
+                    service_description: format!("Description de {label}."),
+                    service_path: format!("/services/atelier-{rank}"),
+                    date_label: format!("séance {rank}"),
+                    date_input: "2026-07-05T14:00".to_owned(),
+                    theme_id: format!("651d1f0a0000000000000{rank:03}"),
+                    theme_name: format!("Thème {rank}"),
+                    photo_url: format!("/media/theme/651d1f0a0000000000000{rank:03}"),
+                    price: 65.0,
+                    max_persons: 8,
+                    booked_persons: 0,
+                    min_persons: 1,
+                }])
+                .remove(0)
+            })
+            .collect()
+    }
 
-        sections_html_while(sessions, true, shown)
+    /// Renders the grid as it stands once a batch has arrived and nothing is
+    /// outstanding.
+    fn sections_html(groups: Vec<SessionGroup>) -> String {
+        sections_html_while(groups, true, false)
     }
 
     /// The same, with the two things the page would otherwise own: whether the
-    /// server said more follow, and how many the visitor has asked for.
-    fn sections_html_while(sessions: Vec<SessionView>, more: bool, shown: usize) -> String {
+    /// server said more follow, and whether a click is waiting on an answer.
+    fn sections_html_while(groups: Vec<SessionGroup>, more: bool, waiting: bool) -> String {
         use leptos_router::components::Router;
         use leptos_router::location::RequestUrl;
 
         Owner::new().with(|| {
             provide_context(RequestUrl::new("/"));
 
-            let shown = RwSignal::new(shown);
+            let shown = RwSignal::new(HOME_CARDS);
 
             view! {
                 <Router>
-                    <UpcomingSessions sessions=sessions more=more shown=shown/>
+                    <UpcomingSessions
+                        groups=groups
+                        more=more
+                        waiting=waiting
+                        shown=shown
+                    />
                 </Router>
             }
             .to_html()
         })
     }
 
-    /// One flat grid: a single heading over the lot, and one card per session
+    /// One flat grid: a single heading over the lot, and one card per offer
     /// whatever kind of workshop it belongs to.
     #[test]
     fn draws_one_grid_of_every_kind() {
-        let html = sections_html(sessions(&[
-            APEROS,
-            APRES_MIDIS,
-            APEROS,
-        ]));
+        let html = sections_html(cards(&[APEROS, APRES_MIDIS, APEROS]));
 
         assert_eq!(html.matches("<section").count(), 1, "not one section: {html}");
         assert_eq!(html.matches("<article").count(), 3, "not three cards: {html}");
@@ -219,19 +230,15 @@ mod tests {
     }
 
     /// Nothing sorts or regroups here, so the cards must come out in the order the
-    /// server handed them over -- which is by date.
+    /// server handed them over -- which is by their soonest date.
     #[test]
     fn keeps_the_order_it_was_given() {
-        let html = sections_html(sessions(&[
-            APEROS,
-            APRES_MIDIS,
-            PARENTS_ENFANTS,
-        ]));
+        let html = sections_html(cards(&[APEROS, APRES_MIDIS, PARENTS_ENFANTS]));
 
         let positions: Vec<_> = (0..3)
             .map(|rank| {
-                html.find(&format!("séance {rank}"))
-                    .unwrap_or_else(|| panic!("séance {rank} is missing: {html}"))
+                html.find(&format!("Thème {rank}"))
+                    .unwrap_or_else(|| panic!("Thème {rank} is missing: {html}"))
             })
             .collect();
 
@@ -241,32 +248,37 @@ mod tests {
         );
     }
 
-    /// With no section per kind, the card's own badge is the only thing naming the
+    /// With no section per kind, the card's own chip is the only thing naming the
     /// workshop, so every kind on show has to be legible from the markup.
     #[test]
     fn every_card_still_names_its_workshop() {
         let labels = [APEROS, PARENTS_ENFANTS];
-        let html = sections_html(sessions(&labels));
+        let html = sections_html(cards(&labels));
 
         for label in labels {
             assert!(html.contains(label), "{label} is not named: {html}");
         }
     }
 
-    /// The whole point of the button: the server said dates follow this batch.
+    /// The whole point of the button: the server said more cards follow this batch.
+    ///
+    /// On a full batch, which is the ordinary case -- the short one is a case of its
+    /// own further down.
     #[test]
     fn offers_another_batch_when_the_server_says_more_follow() {
-        let html = sections_html_while(sessions(&[APEROS, APRES_MIDIS]), true, 2);
+        let full = vec![APEROS; HOME_CARDS];
+        let html = sections_html_while(cards(&full), true, false);
 
+        assert_eq!(html.matches("<article").count(), HOME_CARDS, "not a full batch: {html}");
         assert!(html.contains(MORE), "no way to ask for more: {html}");
         assert!(!refuses_clicks(&html), "nothing is being waited on: {html}");
     }
 
-    /// The mirror, and the reason the server counts one past the batch at all: a
-    /// button that stays on the last batch would answer a click with nothing.
+    /// The mirror, and the reason the server looks one past its window at all: a
+    /// button that stayed on the last batch would answer a click with nothing.
     #[test]
     fn offers_nothing_more_at_the_end_of_the_list() {
-        let html = sections_html_while(sessions(&[APEROS, APRES_MIDIS]), false, 2);
+        let html = sections_html_while(cards(&[APEROS, APRES_MIDIS]), false, false);
 
         assert!(!html.contains(MORE), "the list has ended: {html}");
         assert_eq!(html.matches("<article").count(), 2, "the cards still show: {html}");
@@ -276,19 +288,34 @@ mod tests {
     /// is the only thing that can say the click landed.
     #[test]
     fn the_button_says_so_while_it_waits() {
-        let asked_for = HOME_SESSIONS * 2;
-        let html = sections_html_while(sessions(&[APEROS, APRES_MIDIS]), true, asked_for);
+        let html = sections_html_while(cards(&[APEROS, APRES_MIDIS]), true, true);
 
         assert!(html.contains("Chargement…"), "the wait is invisible: {html}");
         assert!(!html.contains(MORE), "it should not still invite a second click: {html}");
         assert!(refuses_clicks(&html), "a waiting button should refuse clicks: {html}");
     }
 
+    /// Grouping lets the server answer a batch of six with two cards and still have
+    /// more to give: one workshop running one theme weekly fills a whole window on
+    /// its own. The button must stay live through that.
+    ///
+    /// This is why waiting is told rather than inferred. Derived from the number of
+    /// cards on screen, as it was before the merging, this render would show a
+    /// button disabled on "Chargement…" with nothing in flight and no way back.
+    #[test]
+    fn a_short_batch_still_offers_more_without_waiting() {
+        let html = sections_html_while(cards(&[APEROS, APRES_MIDIS]), true, false);
+
+        assert_eq!(html.matches("<article").count(), 2, "fewer cards than a batch: {html}");
+        assert!(html.contains(MORE), "the button should stay live: {html}");
+        assert!(!refuses_clicks(&html), "nothing is in flight: {html}");
+    }
+
     /// "voir +" means "go to this workshop" on every card. The button under the
     /// grid means something else entirely, so it must not borrow the wording.
     #[test]
     fn the_button_does_not_borrow_the_wording_of_the_cards() {
-        let html = sections_html_while(sessions(&[APEROS, APRES_MIDIS]), true, 2);
+        let html = sections_html_while(cards(&[APEROS, APRES_MIDIS]), true, false);
 
         assert_eq!(
             html.matches("voir +").count(),

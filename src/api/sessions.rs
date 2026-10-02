@@ -49,27 +49,54 @@ pub async fn upcoming_offer(service: String) -> Result<Option<BookingOffer>, Ser
 pub async fn next_sessions(count: usize) -> Result<UpcomingPage, ServerFnError> {
     use crate::api::log_failure;
     use crate::db::session;
-    use crate::models::{HOME_SESSIONS, HOME_SESSIONS_MAX};
+    use crate::models::{
+        HOME_CARD_DATES, HOME_CARDS, HOME_CARDS_MAX, SESSIONS_PER_CARD,
+        group_by_service_and_theme,
+    };
 
     // The count comes off the wire, so it is clamped rather than trusted. The floor
     // matters as much as the ceiling: a zero would answer an empty home page.
-    let wanted = count.clamp(HOME_SESSIONS, HOME_SESSIONS_MAX);
+    let wanted = count.clamp(HOME_CARDS, HOME_CARDS_MAX);
 
-    // One beyond the batch, so that finding it is what tells a full batch from the
-    // end of the list. The extra is dropped below and never reaches the page.
-    let mut upcoming = session::list_next_upcoming(wanted as i64 + 1)
+    // Cards are made of sessions, so the window is wider than the batch. One beyond
+    // it, so that finding the extra is what tells a full window from the end of the
+    // calendar; the extra is dropped and never reaches the join.
+    let window = wanted.saturating_mul(SESSIONS_PER_CARD);
+    let mut upcoming = session::list_next_upcoming(window as i64 + 1)
         .await
         .map_err(|error| log_failure("listing the next upcoming sessions", error))?;
 
-    let more = upcoming.len() > wanted;
-    upcoming.truncate(wanted);
+    let window_full = upcoming.len() > window;
+    upcoming.truncate(window);
 
-    // Soonest first out of the query, and `with_booked_persons` keeps that order,
-    // so the page can render the list as it comes.
-    Ok(UpcomingPage {
-        sessions: with_booked_persons(upcoming).await?,
-        more,
-    })
+    // Soonest first out of the query, and `with_booked_persons` keeps that order, so
+    // the cards come out ranked by their soonest date, and the dates inside each are
+    // in order too.
+    let mut groups = group_by_service_and_theme(with_booked_persons(upcoming).await?);
+
+    // The second half matters as much as the first: grouping can collapse a full
+    // window into fewer cards than were asked for -- one workshop running the same
+    // theme twenty times does it -- and the calendar would then be declared over
+    // while it had only been read to the first horizon.
+    let more = groups.len() > wanted || window_full;
+
+    groups.truncate(wanted);
+
+    // Counted over the whole calendar rather than over the window, so that a card
+    // announcing four more dates is not really hiding seventeen.
+    let totals = session::count_upcoming_by_service_and_theme()
+        .await
+        .map_err(|error| log_failure("counting the upcoming dates of each offer", error))?;
+
+    for group in &mut groups {
+        group.keep_soonest(HOME_CARD_DATES);
+
+        let key = (group.service_slug.clone(), group.theme_id.clone());
+        let total = totals.get(&key).copied().unwrap_or(group.sessions.len());
+        group.further = total.saturating_sub(group.sessions.len());
+    }
+
+    Ok(UpcomingPage { groups, more })
 }
 
 /// Every session, for the admin listing.

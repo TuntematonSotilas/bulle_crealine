@@ -20,7 +20,7 @@ pub use service::{
 };
 pub use service_photo::{MAX_SERVICE_PHOTOS, ServicePhotoView};
 pub use session::{
-    BookingOffer, HOME_SESSIONS, HOME_SESSIONS_MAX, SessionView, ThemeSessions, UpcomingPage,
-    group_by_theme,
+    BookingOffer, HOME_CARD_DATES, HOME_CARDS, HOME_CARDS_MAX, SESSIONS_PER_CARD, SessionGroup,
+    SessionView, ThemeSessions, UpcomingPage, group_by_service_and_theme, group_by_theme,
 };
 pub use theme::{AffectedSession, MAX_PHOTO_BYTES, MAX_PHOTO_LABEL, ThemeView};

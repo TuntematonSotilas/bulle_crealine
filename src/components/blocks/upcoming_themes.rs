@@ -1,8 +1,8 @@
-use icons::{ChevronDown, ImageOff, Users};
+use icons::{ChevronDown, ImageOff};
 use leptos::either::{Either, EitherOf3};
 use leptos::prelude::*;
 
-use crate::components::ui::button::{Button, ButtonSize};
+use crate::components::blocks::session_list::{SessionList, SessionRow};
 use crate::models::{SessionView, ThemeSessions};
 
 /// Which part of the offer the workshop page is currently showing.
@@ -213,62 +213,6 @@ fn ThemeCard(group: ThemeSessions, open: Signal<bool>, showing: RwSignal<Showing
                     <SessionList sessions=sessions.get_value()/>
                 </div>
             </Show>
-        </div>
-    }
-}
-
-/// The dates of one theme.
-#[component]
-fn SessionList(sessions: Vec<SessionView>) -> impl IntoView {
-    let rows = sessions
-        .into_iter()
-        .map(|session| view! { <li><SessionRow session=session/></li> })
-        .collect::<Vec<_>>();
-
-    view! { <ul class="flex flex-col gap-3">{rows}</ul> }
-}
-
-/// One date, with what it costs, what is left of it, and how to take it.
-#[component]
-fn SessionRow(session: SessionView) -> impl IntoView {
-    let full = session.is_full();
-    let availability = session.availability_label();
-    let price = session.price_label();
-
-    let action = if full {
-        Either::Left(view! {
-            <span class="inline-flex justify-center items-center px-3 h-8 text-sm font-medium rounded-md border cursor-not-allowed bg-muted text-muted-foreground">
-                "Complet"
-            </span>
-        })
-    } else {
-        Either::Right(view! {
-            // The date travels with the link: it was just chosen here, and the
-            // booking page has no reason to ask for it again.
-            <Button
-                size=ButtonSize::Sm
-                href=format!("/booking/{}?session={}", session.service_slug, session.id)
-            >
-                "Réserver"
-            </Button>
-        })
-    };
-
-    view! {
-        <div class="flex flex-wrap gap-3 justify-between items-center p-4 rounded-2xl border bg-surface text-surface-foreground border-border">
-            <div class="flex flex-col gap-1">
-                <span class="font-medium">{session.date_label}</span>
-                <span class="flex gap-2 items-center text-sm">
-                    <span class="text-muted-foreground">{price}</span>
-                    <Users class="w-3.5 h-3.5 shrink-0 text-heading-soft"/>
-                    <span class=if full {
-                        "font-medium text-destructive"
-                    } else {
-                        "text-muted-foreground"
-                    }>{availability}</span>
-                </span>
-            </div>
-            {action}
         </div>
     }
 }

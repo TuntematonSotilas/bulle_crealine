@@ -2,17 +2,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::ServiceView;
 
-/// How many upcoming sessions the home page shows at a time, every kind of
-/// workshop mixed together and soonest first.
+/// How many cards the home page shows at a time, every kind of workshop mixed
+/// together and soonest first.
+///
+/// A card is one workshop on one theme, however many dates it carries, so this
+/// counts cards rather than dates. That is what keeps the shop window full: a
+/// workshop running weekly used to take a whole batch to itself, six near-identical
+/// tiles differing only in their date.
 ///
 /// The home page opens on this many and asks for this many more each time the
-/// visitor says so. It is a shop window rather than the calendar, so the first
-/// screen stays short; a visitor who wants the whole run of dates for one workshop
-/// is still better served by its own page, which the "voir +" link on each card
-/// points at. The batch is global rather than per kind, so a heavily scheduled
-/// workshop can take the whole of one -- which is the point, those really are the
-/// next dates on offer.
-pub const HOME_SESSIONS: usize = 6;
+/// visitor says so. A visitor who wants the whole run of dates for one workshop is
+/// still better served by its own page, which the "voir +" on each card points at.
+pub const HOME_CARDS: usize = 6;
 
 /// The most the home page will ever hand out, however many batches are asked for.
 ///
@@ -20,20 +21,130 @@ pub const HOME_SESSIONS: usize = 6;
 /// ceiling a crafted request would have the server read, resolve and serialise the
 /// whole collection. Twenty batches is far past what anyone scrolls, and reaching
 /// it leaves the list simply ending -- which is what it does at the real end too.
-pub const HOME_SESSIONS_MAX: usize = HOME_SESSIONS * 20;
+pub const HOME_CARDS_MAX: usize = HOME_CARDS * 20;
 
-/// One batch of the home page's upcoming sessions, and whether any follow.
+/// How many dates one card lists before falling back to a count.
+///
+/// Three shows that a workshop runs more than once while leaving the card roughly
+/// the height it had when it carried a single date. A card ten rows tall would
+/// stretch its whole line of the grid.
+pub const HOME_CARD_DATES: usize = 3;
+
+/// How many sessions are read for each card asked for.
+///
+/// Cards are made of sessions, and how many sessions a card swallows is not known
+/// until they have been read, so the window has to be wider than the batch. Four
+/// rather than two because it has two jobs at once: finding enough distinct
+/// workshop-and-theme pairs, and holding enough dates on each to fill the three
+/// slots a card lists.
+pub const SESSIONS_PER_CARD: usize = 4;
+
+/// One batch of the home page's cards, and whether any follow.
 ///
 /// `more` is answered by the server because only it can tell "the batch happens to
-/// be full" from "this is everything": the query asks for one session beyond the
-/// batch and reports whether it found one. Without that, the button would show on
-/// a total that is an exact multiple of the batch and then do nothing when clicked.
+/// be full" from "this is everything". Without it the button would show on a total
+/// that is an exact multiple of the batch and then do nothing when clicked.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct UpcomingPage {
     /// Soonest first, at most the number asked for. May be empty.
-    pub sessions: Vec<SessionView>,
+    pub groups: Vec<SessionGroup>,
     /// Whether asking for a larger batch would bring anything new.
     pub more: bool,
+}
+
+/// One workshop on one theme, with the upcoming dates it is running.
+///
+/// This is one card on the home page. Sessions sharing both a workshop and a theme
+/// are the same offer on different days, so they belong on one tile.
+///
+/// The workshop and the theme are carried here as well as on every session inside:
+/// they are the same on all of them by construction, and the header reads them from
+/// one place rather than from a session it would have to assume exists. Nothing may
+/// index `sessions` -- the type is deserialised off the wire, so no constructor can
+/// promise it is not empty, and a card with no date must degrade to a card with no
+/// rows rather than panic in the browser.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SessionGroup {
+    /// Half the grouping key. The dates inside build their own booking links from
+    /// their own copy of it.
+    pub service_slug: String,
+    pub service_label: String,
+    pub service_description: String,
+    /// Where that workshop's own page lives, `"/"` when it has been deleted.
+    pub service_path: String,
+    /// The other half of the key, and what `?theme=` hands to that page.
+    pub theme_id: String,
+    pub theme_name: String,
+    /// Empty when the theme has been deleted, exactly as on a session.
+    pub photo_url: String,
+    /// In the order they were given, which is soonest first. Never empty as built,
+    /// and at most [`HOME_CARD_DATES`] long once the server has trimmed.
+    pub sessions: Vec<SessionView>,
+    /// How many further dates this card is not listing.
+    ///
+    /// Counted by the server rather than derived here: a card is handed the dates
+    /// it shows and nothing else, so it has no way to know.
+    pub further: usize,
+}
+
+impl SessionGroup {
+    /// Keeps the soonest `keep` dates and counts the rest into `further`.
+    ///
+    /// The count it leaves behind is only of the dates it was given. The server
+    /// replaces it with a true total, which this cannot know: a card's own dates
+    /// run past whatever window produced it.
+    pub fn keep_soonest(&mut self, keep: usize) {
+        self.further = self.sessions.len().saturating_sub(keep);
+        self.sessions.truncate(keep);
+    }
+
+    /// Line standing in for the dates the card is not listing, or `None` when it is
+    /// listing them all.
+    pub fn further_label(&self) -> Option<String> {
+        match self.further {
+            0 => None,
+            1 => Some("+ 1 autre date".to_owned()),
+            count => Some(format!("+ {count} autres dates")),
+        }
+    }
+}
+
+/// Gathers sessions under the workshop and theme they share, keeping the order they
+/// arrived in.
+///
+/// Two halves to the key where [`group_by_theme`] has one: the home page mixes every
+/// workshop together, so the same theme run by two workshops is two offers, and a
+/// visitor choosing between them is choosing between the workshops.
+///
+/// A card takes the rank of its soonest date, the list being already sorted by date.
+/// That also makes a wider read a prefix-extension of a narrower one: asking for
+/// another batch appends cards and appends dates, rather than reshuffling what is
+/// already on screen under the visitor.
+pub fn group_by_service_and_theme(sessions: Vec<SessionView>) -> Vec<SessionGroup> {
+    let mut groups: Vec<SessionGroup> = Vec::new();
+
+    for session in sessions {
+        let found = groups.iter_mut().find(|group| {
+            group.service_slug == session.service_slug && group.theme_id == session.theme_id
+        });
+
+        match found {
+            Some(group) => group.sessions.push(session),
+            None => groups.push(SessionGroup {
+                service_slug: session.service_slug.clone(),
+                service_label: session.service_label.clone(),
+                service_description: session.service_description.clone(),
+                service_path: session.service_path.clone(),
+                theme_id: session.theme_id.clone(),
+                theme_name: session.theme_name.clone(),
+                photo_url: session.photo_url.clone(),
+                sessions: vec![session],
+                further: 0,
+            }),
+        }
+    }
+
+    groups
 }
 
 /// A session as the browser sees it.
@@ -307,5 +418,120 @@ mod tests {
     #[test]
     fn no_session_gives_no_group() {
         assert!(group_by_theme(Vec::new()).is_empty());
+    }
+
+    /// One session of the named workshop under the named theme. Both halves of the
+    /// grouping key vary, which is what the tests below need to tell apart.
+    fn offered(id: &str, slug: &str, theme_id: &str) -> SessionView {
+        SessionView {
+            id: id.to_owned(),
+            service_slug: slug.to_owned(),
+            service_label: format!("Atelier {slug}"),
+            theme_id: theme_id.to_owned(),
+            theme_name: format!("Thème {theme_id}"),
+            ..session(8, 0)
+        }
+    }
+
+    #[test]
+    fn gathers_the_dates_of_one_workshop_and_theme_under_one_card() {
+        let cards = group_by_service_and_theme(vec![
+            offered("a", "aperos", "theme-1"),
+            offered("b", "aperos", "theme-1"),
+        ]);
+
+        assert_eq!(cards.len(), 1, "one offer should give one card: {cards:?}");
+        assert_eq!(cards[0].sessions.len(), 2, "both dates should be kept: {cards:?}");
+        assert_eq!(cards[0].service_slug, "aperos");
+        assert_eq!(cards[0].theme_id, "theme-1");
+    }
+
+    /// The whole of what tells this apart from [`group_by_theme`]. Without it a
+    /// version keyed on the theme alone would pass every other test here, and the
+    /// home page would merge two workshops that happen to share a theme.
+    #[test]
+    fn the_same_theme_on_two_workshops_gives_two_cards() {
+        let cards = group_by_service_and_theme(vec![
+            offered("a", "aperos", "theme-1"),
+            offered("b", "parents-enfants", "theme-1"),
+        ]);
+
+        assert_eq!(cards.len(), 2, "two workshops are two offers: {cards:?}");
+    }
+
+    /// The other half of the key, for the same reason.
+    #[test]
+    fn the_same_workshop_on_two_themes_gives_two_cards() {
+        let cards = group_by_service_and_theme(vec![
+            offered("a", "aperos", "theme-1"),
+            offered("b", "aperos", "theme-2"),
+        ]);
+
+        assert_eq!(cards.len(), 2, "two themes are two offers: {cards:?}");
+    }
+
+    /// The list arrives sorted by date, so a card takes the rank of its soonest
+    /// date: what shows first is what happens first.
+    #[test]
+    fn a_card_ranks_by_its_soonest_date() {
+        let cards = group_by_service_and_theme(vec![
+            offered("a", "parents-enfants", "theme-2"),
+            offered("b", "aperos", "theme-1"),
+            offered("c", "parents-enfants", "theme-2"),
+        ]);
+
+        let order: Vec<&str> = cards.iter().map(|card| card.service_slug.as_str()).collect();
+
+        assert_eq!(order, ["parents-enfants", "aperos"], "the cards were reordered");
+    }
+
+    #[test]
+    fn no_session_gives_no_card() {
+        assert!(group_by_service_and_theme(Vec::new()).is_empty());
+    }
+
+    #[test]
+    fn keeps_the_soonest_dates_and_counts_the_rest() {
+        let mut card = group_by_service_and_theme(vec![
+            offered("a", "aperos", "theme-1"),
+            offered("b", "aperos", "theme-1"),
+            offered("c", "aperos", "theme-1"),
+            offered("d", "aperos", "theme-1"),
+        ])
+        .remove(0);
+
+        card.keep_soonest(3);
+
+        let kept: Vec<&str> = card.sessions.iter().map(|date| date.id.as_str()).collect();
+        assert_eq!(kept, ["a", "b", "c"], "the soonest three should be the ones kept");
+        assert_eq!(card.further, 1, "the fourth should be counted, not dropped");
+    }
+
+    /// A card with fewer dates than it may list keeps them all and claims nothing.
+    #[test]
+    fn a_card_with_nothing_to_hide_counts_nothing() {
+        let mut card = group_by_service_and_theme(vec![
+            offered("a", "aperos", "theme-1"),
+            offered("b", "aperos", "theme-1"),
+        ])
+        .remove(0);
+
+        card.keep_soonest(3);
+
+        assert_eq!(card.sessions.len(), 2, "both dates should stay");
+        assert_eq!(card.further, 0, "there is nothing left over");
+    }
+
+    #[test]
+    fn spells_out_the_dates_it_is_not_listing() {
+        let mut card = group_by_service_and_theme(vec![offered("a", "aperos", "theme-1")]).remove(0);
+
+        assert_eq!(card.further_label(), None, "nothing to announce");
+
+        card.further = 1;
+        assert_eq!(card.further_label().as_deref(), Some("+ 1 autre date"));
+
+        card.further = 4;
+        assert_eq!(card.further_label().as_deref(), Some("+ 4 autres dates"));
     }
 }

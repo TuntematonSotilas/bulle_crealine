@@ -40,14 +40,9 @@ pub fn ServicePage() -> impl IntoView {
     // not this page.
     let photos = Resource::new(slug, |slug| async move { service_photos(slug).await });
 
-    // `?session=<id>` is how a "voir +" on the home page hands over the date that
-    // was clicked. Read once: it decides where the page opens, and from then on
-    // the visitor's clicks do.
-    let showing = use_query_map()
-        .get_untracked()
-        .get("session")
-        .map_or(Showing::Themes, Showing::Session);
-    let showing = RwSignal::new(showing);
+    // Read once: it decides where the page opens, and from then on the visitor's
+    // clicks do.
+    let showing = RwSignal::new(opening_state(&use_query_map().get_untracked()));
 
     view! {
         <Transition fallback=|| {
@@ -117,5 +112,74 @@ pub fn ServicePage() -> impl IntoView {
                     .map(|photos| view! { <ServiceGallery photos=photos/> })
             })}
         </Transition>
+    }
+}
+
+/// Where the page opens, given the query it was reached with.
+///
+/// `?theme=<id>` is how a "voir +" on the home page hands over the card that was
+/// clicked: a card is one workshop on one theme and carries several of its dates, so
+/// the page has to unfold that theme rather than single out one date.
+///
+/// `?session=<id>` is the older form, kept because links shared while a card was one
+/// date should go on opening where they said. It wins when both are given, being the
+/// more precise of the two.
+///
+/// A free function rather than a few lines inside the component so that the
+/// precedence is pinned by a test without rendering a page around it.
+fn opening_state(query: &leptos_router::params::ParamsMap) -> Showing {
+    query
+        .get("session")
+        .map(Showing::Session)
+        .or_else(|| query.get("theme").map(Showing::Theme))
+        .unwrap_or(Showing::Themes)
+}
+
+#[cfg(all(test, feature = "ssr"))]
+mod tests {
+    use super::*;
+    use leptos_router::params::ParamsMap;
+
+    fn query(pairs: &[(&str, &str)]) -> ParamsMap {
+        let mut map = ParamsMap::new();
+        for (key, value) in pairs {
+            map.insert((*key).to_owned(), (*value).to_owned());
+        }
+
+        map
+    }
+
+    #[test]
+    fn a_bare_url_opens_on_the_grid_of_themes() {
+        assert_eq!(opening_state(&query(&[])), Showing::Themes);
+    }
+
+    /// What a "voir +" on a home card now hands over.
+    #[test]
+    fn a_theme_opens_unfolded() {
+        assert_eq!(
+            opening_state(&query(&[("theme", "t1")])),
+            Showing::Theme("t1".to_owned())
+        );
+    }
+
+    /// Links shared before the home page merged its cards name a session, and have
+    /// to go on opening on it.
+    #[test]
+    fn a_session_still_opens_on_its_own_date() {
+        assert_eq!(
+            opening_state(&query(&[("session", "s1")])),
+            Showing::Session("s1".to_owned())
+        );
+    }
+
+    /// The more precise of the two wins, so adding the newer parameter to an older
+    /// link could not quietly change where it lands.
+    #[test]
+    fn a_session_outranks_the_theme_it_belongs_to() {
+        assert_eq!(
+            opening_state(&query(&[("theme", "t1"), ("session", "s1")])),
+            Showing::Session("s1".to_owned())
+        );
     }
 }
