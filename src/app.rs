@@ -5,7 +5,6 @@ use leptos_router::{
 };
 
 use crate::components::hooks::use_theme_mode::ThemeMode;
-use crate::components::ui::carousel::CarouselContext;
 use crate::components::blocks::{NavMenu, FooterBlock};
 use crate::pages::*;
 
@@ -15,8 +14,6 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
     // Provides context for theme mode management
     provide_context(ThemeMode::init());
-    // Provides context for carousel functionality
-    provide_context(CarouselContext::init());
 
     view! {
         // sets the document title

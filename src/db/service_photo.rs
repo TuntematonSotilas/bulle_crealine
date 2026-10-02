@@ -91,6 +91,24 @@ pub async fn list_for_service(
     Ok(found)
 }
 
+/// Every workshop's photos, oldest first within each, without the bytes.
+///
+/// One read for the whole catalogue rather than one per workshop: there is a handful
+/// of workshops and at most [`crate::models::MAX_SERVICE_PHOTOS`] photos on each, so
+/// an unfiltered read beats building an `$in` out of the slugs -- the same call the
+/// sessions listing makes on the services collection.
+pub async fn list_all() -> Result<Vec<ServicePhotoSummaryDoc>, DbError> {
+    let found = summaries()?
+        .find(doc! {})
+        .projection(doc! { "photo": 0 })
+        .sort(doc! { "service_slug": 1, "uploaded_at": 1, "_id": 1 })
+        .await?
+        .try_collect()
+        .await?;
+
+    Ok(found)
+}
+
 /// How many photos a workshop carries, to cap the gallery and to explain a refusal.
 pub async fn count_for_service(service_slug: &str) -> Result<u64, DbError> {
     Ok(service_photos()?
