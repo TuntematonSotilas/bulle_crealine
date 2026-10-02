@@ -1,11 +1,10 @@
 use leptos::prelude::*;
-use leptos_meta::{Meta, Stylesheet, Title, provide_meta_context};
+use leptos_meta::{Meta, Title, provide_meta_context};
 use leptos_router::{
     StaticSegment, WildcardSegment, components::{Route, Router, Routes}, path
 };
 
 use crate::components::hooks::use_theme_mode::ThemeMode;
-use crate::components::ui::carousel::CarouselContext;
 use crate::components::blocks::{NavMenu, FooterBlock};
 use crate::pages::*;
 
@@ -15,14 +14,8 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
     // Provides context for theme mode management
     provide_context(ThemeMode::init());
-    // Provides context for carousel functionality
-    provide_context(CarouselContext::init());
 
     view! {
-        // injects a stylesheet into the document <head>
-        // id=leptos means cargo-leptos will hot-reload this stylesheet
-        <Stylesheet id="leptos" href="/pkg/bulle_crealine.css"/>
-
         // sets the document title
         <Title text="Bulle Créaline (E.I)"/>
 

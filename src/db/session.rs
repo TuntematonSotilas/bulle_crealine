@@ -70,6 +70,10 @@ impl SessionDoc {
             price: self.price,
             max_persons: self.max_persons,
             booked_persons,
+            // One, not zero, when the workshop is gone: the minimum is read as
+            // `remaining < min_persons`, so a zero would not relax the rule but
+            // switch off every guard standing on it.
+            min_persons: service.map_or(1, |found| found.min_persons),
         }
     }
 }
@@ -112,6 +116,48 @@ pub async fn list_next_upcoming(limit: i64) -> Result<Vec<SessionDoc>, DbError> 
         .await?;
 
     Ok(found)
+}
+
+/// How many upcoming sessions each workshop-and-theme pair has, keyed by slug and
+/// hex theme id.
+///
+/// Serves the "+ N autres dates" line on the home page, which the window that page
+/// reads cannot answer on its own: dates past its horizon are real but unseen, and
+/// a card would say "+ 1 autre date" for a workshop running weekly all year.
+///
+/// One round trip whatever the calendar holds. The `date` index serves the match,
+/// and the grouping leaves one row per pair -- a few dozen, not one per session.
+pub async fn count_upcoming_by_service_and_theme()
+-> Result<std::collections::HashMap<(String, String), usize>, DbError> {
+    let pipeline = vec![
+        doc! { "$match": { "date": { "$gte": DateTime::now() } } },
+        doc! { "$group": {
+            "_id": { "service_type": "$service_type", "theme_id": "$theme_id" },
+            "dates": { "$sum": 1 },
+        } },
+    ];
+
+    let groups: Vec<bson::Document> = sessions()?.aggregate(pipeline).await?.try_collect().await?;
+
+    let mut totals = std::collections::HashMap::new();
+    for group in groups {
+        let Ok(key) = group.get_document("_id") else {
+            continue;
+        };
+        let (Ok(slug), Ok(theme_id)) = (key.get_str("service_type"), key.get_object_id("theme_id"))
+        else {
+            continue;
+        };
+
+        // The key is built the way a `SessionView` carries it, so the caller can
+        // look a group up without converting anything.
+        totals.insert(
+            (slug.to_owned(), theme_id.to_hex()),
+            group.get_i32("dates").unwrap_or_default().max(0) as usize,
+        );
+    }
+
+    Ok(totals)
 }
 
 /// Every session, soonest first, for the admin listing.

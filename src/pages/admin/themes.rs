@@ -7,6 +7,7 @@
 //! admin area.
 
 use leptos::either::{Either, EitherOf3};
+use leptos::html;
 use leptos::prelude::*;
 use leptos_meta::Title;
 use wasm_bindgen::JsCast;
@@ -35,6 +36,35 @@ type SaveAction = Action<FormData, Result<(), ServerFnError>>;
 
 /// How the picker words "no workshop", which posts an empty slug.
 const NO_SERVICE: &str = "Aucun";
+
+/// How many columns the listing has, so a panel slipped between two rows can span
+/// the width of it. Pinned against the header by a test: a fifth column added later
+/// would otherwise leave the panel boxed into four without anything protesting.
+const COLUMNS: &str = "4";
+
+/// Brings the form at the top of the page to the admin's attention.
+///
+/// For that one only. The "Modifier" that opens it can be twenty rows down, so
+/// without this the click looks like it did nothing at all. A panel that opens
+/// beside the button that asked for it needs none of this, and moving the page
+/// under someone who can already see the answer is worse than doing nothing.
+///
+/// Focus goes with the scrolling so the next Tab lands inside the form rather than
+/// back at the top of the document -- `focus()` would scroll on its own, but saying
+/// both is clearer than relying on that side effect.
+///
+/// The form needs `tabindex="-1"` for any of this to happen: `focus()` on a plain
+/// `<div>` does nothing, and does it silently.
+fn reveal(panel: NodeRef<html::Div>) {
+    // Never runs on the server, where there is no viewport to move and no focus to
+    // take.
+    Effect::new(move |_| {
+        if let Some(node) = panel.get() {
+            node.scroll_into_view();
+            let _ = node.focus();
+        }
+    });
+}
 
 /// What the filter picks to mean "do not filter".
 ///
@@ -189,45 +219,23 @@ pub fn AdminThemesPage() -> impl IntoView {
             .and_then(|outcome| outcome.err())
             .map(|error| user_message(&error))
     };
-    let delete_error = move || {
-        delete
-            .value()
-            .get()
-            .and_then(|outcome| outcome.err())
-            .map(|error| user_message(&error))
-    };
 
     view! {
         <Title text="Thèmes — Administration"/>
 
         <AdminShell title="Thèmes" current="/admin/themes">
 
-            {move || {
-                delete_error()
-                    .map(|message| {
-                        view! { <Alert variant=AlertVariant::Destructive>{message}</Alert> }
-                    })
-            }}
-
+            // A deletion is not one of these branches: its confirmation opens inside
+            // the table, under the row it concerns, so the top of the page keeps
+            // offering "Nouveau thème" and nothing shifts beneath the admin.
             {move || match editing.get() {
-                Editing::None => {
-                    EitherOf3::A(
-                        view! {
-                            <div>
-                                <Button on:click=move |_| editing.set(Editing::New)>
-                                    "Nouveau thème"
-                                </Button>
-                            </div>
-                        },
-                    )
-                }
                 Editing::New | Editing::Theme(_) => {
                     let theme = match editing.get() {
                         Editing::Theme(theme) => Some(theme),
                         _ => None,
                     };
 
-                    EitherOf3::B(
+                    Either::Left(
                         view! {
                             <ThemeForm
                                 action=save
@@ -238,10 +246,14 @@ pub fn AdminThemesPage() -> impl IntoView {
                         },
                     )
                 }
-                Editing::Deleting(theme) => {
-                    EitherOf3::C(
+                Editing::None | Editing::Deleting(_) => {
+                    Either::Right(
                         view! {
-                            <DeleteConfirmation action=delete theme=theme on_cancel=cancel/>
+                            <div>
+                                <Button on:click=move |_| editing.set(Editing::New)>
+                                    "Nouveau thème"
+                                </Button>
+                            </div>
                         },
                     )
                 }
@@ -263,7 +275,14 @@ pub fn AdminThemesPage() -> impl IntoView {
                         }
                         Ok(rows) => {
                             Either::Right(
-                                view! { <ThemeTable rows=rows filter=filter editing=editing/> },
+                                view! {
+                                    <ThemeTable
+                                        rows=rows
+                                        filter=filter
+                                        editing=editing
+                                        delete=delete
+                                    />
+                                },
                             )
                         }
                     }
@@ -280,6 +299,8 @@ fn ThemeTable(
     rows: Vec<ThemeView>,
     filter: RwSignal<ServiceFilter>,
     editing: RwSignal<Editing>,
+    /// Carried down to the confirmation, which now opens between two rows.
+    delete: ServerAction<DeleteTheme>,
 ) -> impl IntoView {
     if rows.is_empty() {
         return Either::Left(view! {
@@ -301,10 +322,18 @@ fn ThemeTable(
     // Stored rather than moved into the closure: the filter re-runs it, and each
     // run needs the full list again to narrow it down afresh.
     let rows = StoredValue::new(rows);
+    // Rebuilt here rather than taken as a prop: `editing` is already in hand, and
+    // the same instruction twice is one of them going stale later.
+    let cancel = move || editing.set(Editing::None);
+
+    // Reads the filter, never `editing`: a click on "Supprimer" would otherwise
+    // redraw every row of the table to open one panel.
     let body = move || {
         rows.with_value(|rows| matching(rows, &filter.get()))
             .into_iter()
-            .map(|theme| view! { <ThemeRow theme=theme editing=editing/> })
+            .map(|theme| {
+                view! { <ThemeRows theme=theme editing=editing delete=delete on_cancel=cancel/> }
+            })
             .collect::<Vec<_>>()
     };
 
@@ -326,6 +355,47 @@ fn ThemeTable(
             </Table>
         </TableContainer>
     })
+}
+
+/// One theme's row, and the deletion panel beneath it when it is the one going.
+///
+/// The panel belongs here rather than at the top of the page: the admin clicked a
+/// button in this row, and an answer twenty rows above it reads as nothing having
+/// happened at all.
+#[component]
+fn ThemeRows(
+    theme: ThemeView,
+    editing: RwSignal<Editing>,
+    delete: ServerAction<DeleteTheme>,
+    on_cancel: impl Fn() + 'static + Send + Sync + Copy,
+) -> impl IntoView {
+    let id = theme.id.clone();
+    // Held because the closure below re-runs on every change to `editing` and needs
+    // its own copy each time.
+    let dropping = StoredValue::new(theme.clone());
+
+    view! {
+        <ThemeRow theme=theme editing=editing/>
+
+        {move || {
+            let id = id.clone();
+
+            matches!(editing.get(), Editing::Deleting(ref chosen) if chosen.id == id)
+                .then(|| {
+                    view! {
+                        <TableRow>
+                            <TableCell attr:colspan=COLUMNS>
+                                <DeleteConfirmation
+                                    action=delete
+                                    theme=dropping.get_value()
+                                    on_cancel=on_cancel
+                                />
+                            </TableCell>
+                        </TableRow>
+                    }
+                })
+        }}
+    }
 }
 
 /// One theme in the listing.
@@ -463,6 +533,11 @@ fn ThemeForm(
     });
     let services = Resource::new(|| (), |()| async move { all_services().await });
 
+    // This form stays at the top of the page -- it is long, and it belongs there --
+    // but the "Modifier" that opens it can be twenty rows down.
+    let panel = NodeRef::new();
+    reveal(panel);
+
     // Hand-rolled instead of `<ActionForm>`: only a multipart body can carry a file.
     let submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -481,6 +556,10 @@ fn ThemeForm(
     let pending = action.pending();
 
     view! {
+        // Focused rather than its first field: a screen reader then announces
+        // "Modifier le thème" and what it holds, where landing straight in the name
+        // would say "Nom, edit" without a word about where that came from.
+        <div node_ref=panel tabindex="-1" class="scroll-mt-6 outline-none">
         <Card>
             <CardHeader>
                 <CardTitle>
@@ -606,6 +685,7 @@ fn ThemeForm(
                 </form>
             </CardContent>
         </Card>
+        </div>
     }
 }
 
@@ -684,14 +764,33 @@ fn DeleteConfirmation(
         |id| async move { theme_sessions(id).await },
     );
 
-    view! {
-        <Card>
-            <CardHeader>
-                <CardTitle>"Supprimer ce thème ?"</CardTitle>
-                <CardDescription>{theme.name.clone()}</CardDescription>
-            </CardHeader>
+    // Reported here rather than at the top of the page, where the admin is no
+    // longer looking: a refusal belongs beside the button that drew it. Derived from
+    // the action rather than taken as a prop -- this is the only place its outcome
+    // is shown.
+    let failure = move || {
+        action
+            .value()
+            .get()
+            .and_then(|outcome| outcome.err())
+            .map(|error| user_message(&error))
+    };
 
-            <CardContent>
+    // Neither scrolled to nor focused, unlike the form at the top of the page: this
+    // panel opens in the row right under the button that asked for it, already in
+    // view. Scrolling would only yank that row to the top of the screen for nothing,
+    // and the panel follows the button in reading order anyway, so the next Tab
+    // reaches it without being sent.
+    view! {
+        <div class="p-4 rounded-md border border-border bg-surface">
+            // Outside the `<Transition>` below on purpose: what it wraps never
+            // resolves under a synchronous `to_html`, so a title placed inside would
+            // leave the panel with nothing a test could see.
+            <p class="font-medium">
+                {format!("Supprimer « {} » ?", theme.name)}
+            </p>
+
+            <div class="mt-3">
                 <Transition fallback=|| ()>
                     {move || {
                         let id = id.clone();
@@ -729,8 +828,19 @@ fn DeleteConfirmation(
                         })
                     }}
                 </Transition>
-            </CardContent>
-        </Card>
+            </div>
+
+            {move || {
+                failure()
+                    .map(|message| {
+                        view! {
+                            <Alert variant=AlertVariant::Destructive class="mt-3">
+                                {message}
+                            </Alert>
+                        }
+                    })
+            }}
+        </div>
     }
 }
 
@@ -849,13 +959,29 @@ mod tests {
     }
 
     fn table_html(rows: Vec<ThemeView>) -> String {
+        table_html_while(rows, Editing::None)
+    }
+
+    /// The table as it renders while the admin is in the middle of something, which
+    /// is what puts a deletion panel between two rows.
+    fn table_html_while(rows: Vec<ThemeView>, editing: Editing) -> String {
+        // A deletion panel owns a `Resource`, and nothing else in this table does.
+        crate::pages::admin::init_test_executor();
+
         Owner::new().with(|| {
             let filter = RwSignal::new(ServiceFilter::default());
-            let editing = RwSignal::new(Editing::None);
+            let editing = RwSignal::new(editing);
+            let delete = ServerAction::<DeleteTheme>::new();
 
-            view! { <ThemeTable rows=rows filter=filter editing=editing/> }.to_html()
+            view! {
+                <ThemeTable rows=rows filter=filter editing=editing delete=delete/>
+            }
+            .to_html()
         })
     }
+
+    /// Everything a panel between two rows needs in order to be found there.
+    const CONFIRMATION: &str = "Supprimer «";
 
     /// A creation has no photo to show yet, and must ask for one.
     #[test]
@@ -887,6 +1013,7 @@ mod tests {
             icon: String::new(),
             pro,
             position: 0,
+            min_persons: 1,
         }
     }
 
@@ -1167,5 +1294,90 @@ mod tests {
         assert!(html.contains("2 séance(s)"), "the count should show: {html}");
         assert!(html.contains("dimanche 5 juillet 2026 à 14h00"), "and each session: {html}");
         assert!(html.contains("lundi 6 juillet 2026 à 10h00"), "including the second: {html}");
+    }
+
+    /// Where in the string `needle` sits, so the order of two things in the rendered
+    /// markup can be asserted. Splitting on `<tr` would not do: the panel is a row
+    /// of its own, and the fragment would stop short of it.
+    fn at(html: &str, needle: &str) -> usize {
+        html.find(needle)
+            .unwrap_or_else(|| panic!("{needle} is missing: {html}"))
+    }
+
+    /// The whole point of the change: the answer appears where the button was, not
+    /// twenty rows above it.
+    #[test]
+    fn the_confirmation_opens_under_the_row_it_concerns() {
+        let html = table_html_while(
+            vec![theme(), other()],
+            Editing::Deleting(theme()),
+        );
+
+        assert!(html.contains(CONFIRMATION), "no confirmation at all: {html}");
+        assert!(
+            at(&html, "Aquarelle") < at(&html, CONFIRMATION),
+            "the panel should follow its row: {html}"
+        );
+        assert!(
+            at(&html, CONFIRMATION) < at(&html, "Bijoux en résine"),
+            "and come before the next one: {html}"
+        );
+    }
+
+    /// One panel, under one row. Keying it on anything looser than the id would open
+    /// it under every row at once.
+    #[test]
+    fn only_the_row_being_deleted_carries_a_confirmation() {
+        let html = table_html_while(
+            vec![theme(), other()],
+            Editing::Deleting(other()),
+        );
+
+        assert_eq!(html.matches(CONFIRMATION).count(), 1, "not exactly one: {html}");
+        assert!(
+            at(&html, "Aquarelle") < at(&html, CONFIRMATION),
+            "it opened under the wrong row: {html}"
+        );
+    }
+
+    #[test]
+    fn a_table_nobody_is_deleting_from_carries_none() {
+        let html = table_html(vec![theme(), other()]);
+
+        assert!(!html.contains(CONFIRMATION), "nothing should be asked: {html}");
+    }
+
+    /// The panel spans the table. A column added to the header without touching
+    /// `COLUMNS` would box it into part of the width, which nothing else would catch.
+    #[test]
+    fn the_confirmation_spans_every_column() {
+        let html = table_html_while(vec![theme()], Editing::Deleting(theme()));
+
+        // Counted by the component's own marker: `<th` would also match `<thead`.
+        let columns = html.matches(r#"data-name="TableHead""#).count();
+        assert_eq!(
+            COLUMNS,
+            columns.to_string(),
+            "the panel spans {COLUMNS} of {columns} columns: {html}"
+        );
+        assert!(
+            html.contains(&format!(r#"colspan="{COLUMNS}""#)),
+            "the cell should carry it: {html}"
+        );
+    }
+
+    /// `focus()` on a plain `<div>` does nothing, and does it silently: without this
+    /// attribute the whole of the scroll-into-view behaviour is dead code.
+    #[test]
+    fn the_form_can_be_given_focus() {
+        crate::pages::admin::init_test_executor();
+
+        let html = Owner::new().with(|| {
+            let action: SaveAction = Action::new_local(|_: &FormData| async { Ok(()) });
+            let error: Signal<Option<String>> = Signal::derive(|| None);
+            view! { <ThemeForm action=action theme=None error=error on_cancel=|| {}/> }.to_html()
+        });
+
+        assert!(html.contains(r#"tabindex="-1""#), "the panel is not focusable: {html}");
     }
 }

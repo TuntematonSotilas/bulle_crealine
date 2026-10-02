@@ -1,5 +1,4 @@
 use icons::{ChevronLeft, ChevronRight};
-use leptos::context::Provider;
 use leptos::prelude::*;
 use tw_merge::*;
 
@@ -44,7 +43,19 @@ pub fn Carousel(
     #[prop(optional)] looping: bool,
 ) -> impl IntoView {
     let carousel_id = use_random_id_for("carousel");
-    let ctx = CarouselContext { carousel_id: carousel_id.clone(), orientation };
+
+    // Provided here, before the children are built, rather than through a
+    // `<Provider>` wrapped around them.
+    //
+    // `view!` builds its tree eagerly, so `{children()}` inside a `<Provider>` runs
+    // *before* that provider does: the children would look the context up and find
+    // whichever one was provided further up the page -- one id shared by every
+    // carousel on it. The track would then carry an id this carousel's script never
+    // searches for, and `setup` would retry every 50 ms for ever.
+    provide_context(CarouselContext { carousel_id: carousel_id.clone(), orientation });
+
+    // Built after the context is in place, for the same reason.
+    let children = children();
 
     let orientation_str = match orientation {
         CarouselOrientation::Horizontal => "horizontal",
@@ -54,22 +65,20 @@ pub fn Carousel(
     let class = tw_merge!("relative", class);
 
     view! {
-        <Provider value=ctx>
+        <div
+            data-name="Carousel"
+            data-carousel-id=carousel_id.clone()
+            data-carousel-orientation=orientation_str
+            data-carousel-loop=looping.to_string()
+            class=class
+            role="region"
+            aria-roledescription="carrousel"
+            tabindex="0"
+        >
+            {children}
+        </div>
 
-            <div
-                data-name="Carousel"
-                data-carousel-id=carousel_id.clone()
-                data-carousel-orientation=orientation_str
-                data-carousel-loop=looping.to_string()
-                class=class
-                role="region"
-                aria-roledescription="carousel"
-                tabindex="0"
-            >
-                {children()}
-            </div>
-
-            <script>
+        <script>
                 {format!(
                     r#"
                     (function() {{
@@ -183,8 +192,7 @@ pub fn Carousel(
                     "#,
                     carousel_id,
                 )}
-            </script>
-        </Provider>
+        </script>
     }
 }
 
@@ -233,7 +241,7 @@ pub fn CarouselItem(children: Children, #[prop(optional, into)] class: String) -
     let class = tw_merge!("min-w-0 shrink-0 grow-0 basis-full snap-start", padding, class);
 
     view! {
-        <div data-name="CarouselItem" role="group" aria-roledescription="slide" class=class>
+        <div data-name="CarouselItem" role="group" aria-roledescription="diapositive" class=class>
             {children()}
         </div>
     }
@@ -259,9 +267,9 @@ pub fn CarouselPrevious(#[prop(optional, into)] class: String) -> impl IntoView 
     );
 
     view! {
-        <button data-name="CarouselPrevious" data-carousel-prev=ctx.carousel_id class=class aria-label="Previous slide">
+        <button data-name="CarouselPrevious" data-carousel-prev=ctx.carousel_id class=class aria-label="Image précédente">
             <ChevronLeft class="size-4 no-tooltips" />
-            <span class="sr-only">"Previous slide"</span>
+            <span class="sr-only">"Image précédente"</span>
         </button>
     }
 }
@@ -286,9 +294,9 @@ pub fn CarouselNext(#[prop(optional, into)] class: String) -> impl IntoView {
     );
 
     view! {
-        <button data-name="CarouselNext" data-carousel-next=ctx.carousel_id class=class aria-label="Next slide">
+        <button data-name="CarouselNext" data-carousel-next=ctx.carousel_id class=class aria-label="Image suivante">
             <ChevronRight class="size-4 no-tooltips" />
-            <span class="sr-only">"Next slide"</span>
+            <span class="sr-only">"Image suivante"</span>
         </button>
     }
 }
@@ -304,4 +312,93 @@ pub fn CarouselIndicator(#[prop(optional, into)] class: String) -> impl IntoView
     let class = tw_merge!("py-2 text-center text-sm text-muted-foreground", class);
 
     view! { <div data-name="CarouselIndicator" data-carousel-indicator=ctx.carousel_id class=class /> }
+}
+#[cfg(all(test, feature = "ssr"))]
+mod tests {
+    use super::*;
+
+    fn carousel_html(slides: usize) -> String {
+        Owner::new().with(|| {
+            view! {
+                <Carousel>
+                    <CarouselContent>
+                        {(0..slides)
+                            .map(|rank| view! { <CarouselItem>{format!("image {rank}")}</CarouselItem> })
+                            .collect::<Vec<_>>()}
+                    </CarouselContent>
+                    <CarouselPrevious/>
+                    <CarouselNext/>
+                    <CarouselIndicator/>
+                </Carousel>
+            }
+            .to_html()
+        })
+    }
+
+    /// The value of `attribute` on the first element that carries it.
+    fn attribute(html: &str, attribute: &str) -> String {
+        let marker = format!("{attribute}=\"");
+        let start = html
+            .find(&marker)
+            .unwrap_or_else(|| panic!("no {attribute}: {html}"))
+            + marker.len();
+
+        html[start..]
+            .split('"')
+            .next()
+            .unwrap_or_else(|| panic!("unterminated {attribute}: {html}"))
+            .to_owned()
+    }
+
+    /// The whole carousel hangs on one id: the script looks the track and the
+    /// buttons up by it, and finding nothing it retries every 50 ms for ever rather
+    /// than failing loudly. Nothing on screen says which of the two happened.
+    ///
+    /// They disagreed for as long as this component went unused: `view!` builds its
+    /// tree eagerly, so the children of a `<Provider>` read the context before the
+    /// provider ran and found whichever one the application had put at its root.
+    #[test]
+    fn every_part_of_a_carousel_answers_to_the_same_id() {
+        let html = carousel_html(2);
+        let id = attribute(&html, "data-carousel-id");
+
+        for part in ["data-carousel-track", "data-carousel-prev", "data-carousel-next"] {
+            assert_eq!(attribute(&html, part), id, "{part} answers to another carousel: {html}");
+        }
+    }
+
+    /// Two on one page must not share an id, or each one's arrows would drive the
+    /// other's track.
+    ///
+    /// Matched on the attribute where it follows `data-name`, not on the bare
+    /// `data-carousel-id="`: the script carries that string too, inside the selector
+    /// it looks the root up with, so a plain search finds two per carousel.
+    #[test]
+    fn two_carousels_do_not_share_an_id() {
+        let html = format!("{}{}", carousel_html(1), carousel_html(1));
+        let marker = r#"data-name="Carousel" data-carousel-id=""#;
+
+        let ids: Vec<&str> = html
+            .match_indices(marker)
+            .map(|(at, _)| {
+                html[at + marker.len()..].split('"').next().expect("unterminated id")
+            })
+            .collect();
+
+        assert_eq!(ids.len(), 2, "not two carousels: {html}");
+        assert_ne!(ids[0], ids[1], "both answer to the same id: {html}");
+    }
+
+    /// The script counts slides with `querySelectorAll('[role="group"]')`, so each
+    /// one has to carry that role for the indicator to read "1 / 3".
+    ///
+    /// Counted on `data-name` rather than on the role itself, for the reason above:
+    /// the script's own selector holds the string.
+    #[test]
+    fn every_slide_is_a_group_the_script_can_count() {
+        let html = carousel_html(3);
+
+        assert_eq!(html.matches(r#"data-name="CarouselItem""#).count(), 3, "{html}");
+        assert!(html.contains(r#"role="group""#), "a slide is not a group: {html}");
+    }
 }

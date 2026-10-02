@@ -133,6 +133,8 @@ fn BookingForm(
     let confirmed = move || result.get().and_then(|outcome| outcome.ok());
 
     let bookable = sessions.iter().filter(|session| !session.is_full()).count();
+    // Read here because `service` is moved into the confirmation closure below.
+    let minimum = service.min_persons;
 
     if sessions.is_empty() {
         return Either::Left(view! {
@@ -261,11 +263,23 @@ fn BookingForm(
                                     <NumberField
                                         id="persons"
                                         name="persons"
-                                        min=1.0
+                                        min=f64::from(minimum)
                                         max=f64::from(MAX_PERSONS_PER_BOOKING)
-                                        value=1.0
+                                        value=f64::from(minimum)
                                         required=true
                                     />
+                                    // Only where it says something: a minimum of
+                                    // one is the shape of the field anyway.
+                                    {(minimum > 1)
+                                        .then(|| {
+                                            view! {
+                                                <p class="text-sm text-muted-foreground">
+                                                    {format!(
+                                                        "Cet atelier se réserve à partir de {minimum} personnes.",
+                                                    )}
+                                                </p>
+                                            }
+                                        })}
                                 </div>
                             </div>
 
@@ -465,6 +479,7 @@ mod tests {
             icon: "Wine".to_owned(),
             pro: false,
             position: 0,
+            min_persons: 1,
         }
     }
 
@@ -483,14 +498,24 @@ mod tests {
             price: 65.0,
             max_persons: 8,
             booked_persons: 2,
+            min_persons: 1,
         }
     }
 
-    fn form_html() -> String {
+    /// The same workshop, attended in pairs: the parents-and-children case.
+    fn in_pairs() -> ServiceView {
+        ServiceView { min_persons: 2, ..service() }
+    }
+
+    fn form_html_for(service: ServiceView) -> String {
         Owner::new().with(|| {
-            view! { <BookingForm service=service() sessions=vec![session()] chosen=None/> }
+            view! { <BookingForm service=service sessions=vec![session()] chosen=None/> }
                 .to_html()
         })
+    }
+
+    fn form_html() -> String {
+        form_html_for(service())
     }
 
     /// The rendered `<input>` carrying this id, so an assertion about one field
@@ -515,6 +540,34 @@ mod tests {
 
         let email = input_with_id(&html, "email");
         assert!(!email.contains("required"), "the email should be optional: {email}");
+    }
+
+    /// The field has to open on the minimum, not merely refuse less than it: a
+    /// visitor who never touches the stepper would otherwise post a one and be
+    /// turned down by the server for a rule nothing on the page had stated.
+    #[test]
+    fn a_workshop_attended_in_pairs_opens_the_count_on_two() {
+        let html = form_html_for(in_pairs());
+        let persons = input_with_id(&html, "persons");
+
+        assert!(persons.contains(r#"min="2""#), "one should be out of reach: {persons}");
+        assert!(persons.contains(r#"value="2""#), "and two should be the start: {persons}");
+        assert!(
+            html.contains("à partir de 2 personnes"),
+            "the reason should be written out: {html}"
+        );
+    }
+
+    /// Everywhere else the floor is one, which is no rule at all and needs no
+    /// sentence explaining itself.
+    #[test]
+    fn an_ordinary_workshop_still_opens_the_count_on_one() {
+        let html = form_html();
+        let persons = input_with_id(&html, "persons");
+
+        assert!(persons.contains(r#"min="1""#), "the floor should stay one: {persons}");
+        assert!(persons.contains(r#"value="1""#), "and be where it starts: {persons}");
+        assert!(!html.contains("à partir de"), "nothing to explain here: {html}");
     }
 
     fn form_with(chosen: Option<&str>) -> String {

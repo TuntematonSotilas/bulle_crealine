@@ -5,13 +5,26 @@ async fn main() -> std::io::Result<()> {
     use actix_web::*;
     use leptos::prelude::*;
     use leptos::config::get_configuration;
-    use leptos_meta::MetaTags;
+    use leptos_meta::{HashedStylesheet, MetaTags};
     use leptos_actix::{generate_route_list, LeptosRoutes};
     use bulle_crealine::app::*;
     use bulle_crealine::auth::{config::AdminConfig, middleware::admin_guard};
+    use bulle_crealine::cache::{cache_headers, set_bundle_is_stamped};
     use bulle_crealine::media;
 
-    let conf = get_configuration(None).unwrap();
+    let mut conf = get_configuration(None).unwrap();
+
+    // The image renames the bundle after a digest of its contents, so the name the
+    // configuration carries is only the one the build started from. Reading the real
+    // one off the disk -- before anything is served -- is what keeps the two from
+    // ever disagreeing. An empty name is a build that did not go through
+    // cargo-leptos, where nothing was stamped and a year of caching would be a
+    // year of stale WASM.
+    let shipped = stamped_bundle(&conf.leptos_options);
+    let built_as = conf.leptos_options.output_name.clone();
+    set_bundle_is_stamped(!built_as.is_empty() && *shipped != *built_as);
+    conf.leptos_options.output_name = shipped;
+
     let addr = conf.leptos_options.site_addr;
 
     // The admin area is optional: without a usable configuration, the public site
@@ -46,6 +59,9 @@ async fn main() -> std::io::Result<()> {
         App::new()
             // turn away unauthenticated /admin pages before any rendering
             .wrap(middleware::from_fn(admin_guard))
+            // say out loud how long each kind of response may be reused; outermost
+            // of the two, so the guard's redirect is covered as well
+            .wrap(middleware::from_fn(cache_headers))
             // serve JS/WASM/CSS from `pkg`
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
             // serve other assets from the `assets` directory
@@ -54,6 +70,8 @@ async fn main() -> std::io::Result<()> {
             .service(favicon)
             // serve theme photos, which live in Mongo rather than on disk
             .route("/media/theme/{id}", web::get().to(media::theme_photo))
+            // the same, for the photos of a workshop run for a structure
+            .route("/media/service-photo/{id}", web::get().to(media::service_photo))
             // photo uploads do not fit under actix's 256 kB default body limit
             .app_data(web::PayloadConfig::new(media::MAX_BODY_BYTES))
             .leptos_routes(routes, {
@@ -67,6 +85,11 @@ async fn main() -> std::io::Result<()> {
                                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                                 <AutoReload options=leptos_options.clone() />
                                 <HydrationScripts options=leptos_options.clone()/>
+                                // Named from the same `output_name` as the scripts
+                                // above, so the stylesheet follows the bundle when
+                                // the image stamps it. A hard-coded href would go on
+                                // asking for a file that no longer exists.
+                                <HashedStylesheet options=leptos_options.clone() id="leptos"/>
                                 <MetaTags/>
                                 <script>
                                     // Set the initial theme mode before the app loads to prevent flashes
@@ -93,6 +116,61 @@ async fn main() -> std::io::Result<()> {
     .bind(&addr)?
     .run()
     .await
+}
+
+/// Finds the name the bundle actually ships under.
+///
+/// The image renames `bulle_crealine.js` to `bulle_crealine.<digest>.js`, so that a
+/// deploy changes the URL and no browser can go on running yesterday's WASM. Reading
+/// the name off the disk rather than out of the environment means the two can never
+/// disagree -- and an image where the rename did not happen boots just the same,
+/// serving the unstamped name.
+///
+/// Panicking here is deliberate, and happens before the port is bound: a bad image is
+/// then a failed deploy, and the host keeps the previous one serving. The alternative
+/// is a site answering every request with an unstyled page that never hydrates.
+#[cfg(feature = "ssr")]
+fn stamped_bundle(options: &leptos::config::LeptosOptions) -> std::sync::Arc<str> {
+    use std::path::PathBuf;
+
+    let pkg = PathBuf::from(options.site_root.to_string())
+        .join(options.site_pkg_dir.to_string());
+
+    let mut names: Vec<String> = std::fs::read_dir(&pkg)
+        .unwrap_or_else(|error| panic!("{} cannot be read: {error}", pkg.display()))
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .and_then(|name| name.strip_suffix(".js"))
+                .map(str::to_owned)
+        })
+        .collect();
+    names.sort();
+
+    let [name] = names.as_slice() else {
+        panic!(
+            "{} should hold exactly one .js file, the bundle; it holds {}: {names:?}",
+            pkg.display(),
+            names.len()
+        )
+    };
+
+    // The three travel together, or the page breaks in a way no visitor can report
+    // usefully: scripts that answer 404, or a page with no styling at all.
+    for extension in ["wasm", "css"] {
+        let sibling = pkg.join(format!("{name}.{extension}"));
+        assert!(
+            sibling.exists(),
+            "the bundle is incomplete: {} is missing beside {name}.js",
+            sibling.display()
+        );
+    }
+
+    println!("serving the bundle as {name}");
+
+    name.as_str().into()
 }
 
 #[cfg(feature = "ssr")]

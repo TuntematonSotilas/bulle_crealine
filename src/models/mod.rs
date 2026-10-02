@@ -5,7 +5,9 @@
 //! stored live in [`crate::db`].
 
 pub mod booking;
+pub mod catalogue;
 pub mod service;
+pub mod service_photo;
 pub mod session;
 pub mod theme;
 
@@ -13,9 +15,14 @@ pub use booking::{
     BookingContact, BookingProblem, BookingRequest, BookingView, MAX_PERSONS_PER_BOOKING,
     is_french_phone, phone_key,
 };
+pub use catalogue::{PhotoView, ServicePictures};
 pub use service::{
     SERVICE_ICONS, STUDIO_ADDRESS, STUDIO_MAP_URL, ServiceView, icon_label, is_valid_slug,
     section_prefix, section_title, slugify,
 };
-pub use session::{BookingOffer, HOME_SESSIONS, SessionView, ThemeSessions, group_by_theme};
+pub use service_photo::{MAX_SERVICE_PHOTOS, ServicePhotoView};
+pub use session::{
+    BookingOffer, HOME_CARD_DATES, HOME_CARDS, HOME_CARDS_MAX, SESSIONS_PER_CARD, SessionGroup,
+    SessionView, ThemeSessions, UpcomingPage, group_by_service_and_theme, group_by_theme,
+};
 pub use theme::{AffectedSession, MAX_PHOTO_BYTES, MAX_PHOTO_LABEL, ThemeView};

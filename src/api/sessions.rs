@@ -2,7 +2,7 @@
 
 use leptos::prelude::*;
 
-use crate::models::{BookingContact, BookingOffer, SessionView};
+use crate::models::{BookingContact, BookingOffer, SessionView, UpcomingPage};
 
 /// One workshop and its upcoming dates, for the public booking page.
 ///
@@ -35,23 +35,68 @@ pub async fn upcoming_offer(service: String) -> Result<Option<BookingOffer>, Ser
     }))
 }
 
-/// The next few sessions on offer, every kind of workshop mixed together and
+/// The next `count` sessions on offer, every kind of workshop mixed together and
 /// soonest first, for the home page.
+///
+/// `count` grows by a batch each time the visitor asks for more, so this is called
+/// afresh on every click rather than paged from an offset: the whole list is read
+/// back each time. That trades a little repeated work for a list that cannot go
+/// inconsistent half way down -- an offset would skip or repeat a session whenever
+/// the admin adds or removes one between two clicks.
 ///
 /// Open to everyone, like [`upcoming_offer`].
 #[server]
-pub async fn next_sessions() -> Result<Vec<SessionView>, ServerFnError> {
+pub async fn next_sessions(count: usize) -> Result<UpcomingPage, ServerFnError> {
     use crate::api::log_failure;
     use crate::db::session;
-    use crate::models::HOME_SESSIONS;
+    use crate::models::{
+        HOME_CARD_DATES, HOME_CARDS, HOME_CARDS_MAX, SESSIONS_PER_CARD,
+        group_by_service_and_theme,
+    };
 
-    let upcoming = session::list_next_upcoming(HOME_SESSIONS as i64)
+    // The count comes off the wire, so it is clamped rather than trusted. The floor
+    // matters as much as the ceiling: a zero would answer an empty home page.
+    let wanted = count.clamp(HOME_CARDS, HOME_CARDS_MAX);
+
+    // Cards are made of sessions, so the window is wider than the batch. One beyond
+    // it, so that finding the extra is what tells a full window from the end of the
+    // calendar; the extra is dropped and never reaches the join.
+    let window = wanted.saturating_mul(SESSIONS_PER_CARD);
+    let mut upcoming = session::list_next_upcoming(window as i64 + 1)
         .await
         .map_err(|error| log_failure("listing the next upcoming sessions", error))?;
 
-    // Soonest first out of the query, and `with_booked_persons` keeps that order,
-    // so the page can render the list as it comes.
-    with_booked_persons(upcoming).await
+    let window_full = upcoming.len() > window;
+    upcoming.truncate(window);
+
+    // Soonest first out of the query, and `with_booked_persons` keeps that order, so
+    // the cards come out ranked by their soonest date, and the dates inside each are
+    // in order too.
+    let mut groups = group_by_service_and_theme(with_booked_persons(upcoming).await?);
+
+    // The second half matters as much as the first: grouping can collapse a full
+    // window into fewer cards than were asked for -- one workshop running the same
+    // theme twenty times does it -- and the calendar would then be declared over
+    // while it had only been read to the first horizon.
+    let more = groups.len() > wanted || window_full;
+
+    groups.truncate(wanted);
+
+    // Counted over the whole calendar rather than over the window, so that a card
+    // announcing four more dates is not really hiding seventeen.
+    let totals = session::count_upcoming_by_service_and_theme()
+        .await
+        .map_err(|error| log_failure("counting the upcoming dates of each offer", error))?;
+
+    for group in &mut groups {
+        group.keep_soonest(HOME_CARD_DATES);
+
+        let key = (group.service_slug.clone(), group.theme_id.clone());
+        let total = totals.get(&key).copied().unwrap_or(group.sessions.len());
+        group.further = total.saturating_sub(group.sessions.len());
+    }
+
+    Ok(UpcomingPage { groups, more })
 }
 
 /// Every session, for the admin listing.
@@ -118,6 +163,15 @@ pub async fn save_session(
         return Err(ServerFnError::new(
             "Une séance doit accepter au moins une personne.",
         ));
+    }
+    // Read before `service.slug` is moved into the document below. A session too
+    // small for the smallest booking its workshop allows would be born full, while
+    // the admin table showed a reassuring "0 / 1".
+    if max_persons < service.min_persons {
+        return Err(ServerFnError::new(format!(
+            "Cet atelier se réserve à partir de {} personnes : une séance ne peut pas en accepter moins.",
+            service.min_persons
+        )));
     }
 
     let document = SessionDoc {

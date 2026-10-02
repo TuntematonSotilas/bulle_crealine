@@ -1,8 +1,8 @@
-use icons::{ChevronDown, ImageOff, Users};
-use leptos::either::{Either, EitherOf3};
+use icons::{ChevronDown, ImageOff};
+use leptos::either::Either;
 use leptos::prelude::*;
 
-use crate::components::ui::button::{Button, ButtonSize};
+use crate::components::blocks::session_list::{SessionList, SessionRow};
 use crate::models::{SessionView, ThemeSessions};
 
 /// Which part of the offer the workshop page is currently showing.
@@ -43,7 +43,7 @@ pub fn UpcomingThemes(groups: Vec<ThemeSessions>, showing: RwSignal<Showing>) ->
 
     view! {
         <section class="mx-auto mt-12 max-w-6xl">
-            <h2 class="text-2xl font-bold lg:text-3xl text-heading">"Thèmes"</h2>
+            <h2 class="text-2xl font-bold lg:text-3xl text-heading">"Prochaines séances"</h2>
             <span class="block mt-3 w-10 h-1 rounded-full bg-heading-soft"></span>
 
             {body}
@@ -59,22 +59,30 @@ pub fn UpcomingThemes(groups: Vec<ThemeSessions>, showing: RwSignal<Showing>) ->
 fn Body(groups: Vec<ThemeSessions>, showing: RwSignal<Showing>) -> impl IntoView {
     let groups = StoredValue::new(groups);
 
-    move || match showing.get() {
-        Showing::Session(id) => match find_session(&groups.get_value(), &id) {
-            // A session that no longer exists -- deleted, or simply past since the
-            // link was shared -- falls back to the grid rather than to a blank.
-            None => EitherOf3::A(view! { <ThemeGrid groups=groups.get_value() showing=showing/> }),
-            Some((theme_name, session)) => EitherOf3::B(view! {
-                <div class="mt-6">
-                    <BackToThemes showing=showing/>
-                    <h3 class="mt-4 text-lg font-semibold text-heading">{theme_name}</h3>
-                    <div class="mt-3">
-                        <SessionRow session=session/>
-                    </div>
+    // A `Memo` rather than a read of `showing` in the closure below, because there
+    // are only two shapes of page here -- one date on its own, or the grid -- and
+    // unfolding a theme moves between neither of them. Read directly, every click
+    // on a card rebuilt the whole grid: each card cloned afresh and diffed back
+    // against itself, for a state change the per-card `open` signals already carry.
+    //
+    // A session that no longer exists -- deleted, or simply past since the link was
+    // shared -- lands on `None` and so falls back to the grid rather than a blank.
+    let single = Memo::new(move |_| match showing.get() {
+        Showing::Session(id) => find_session(&groups.get_value(), &id),
+        _ => None,
+    });
+
+    move || match single.get() {
+        None => Either::Left(view! { <ThemeGrid groups=groups.get_value() showing=showing/> }),
+        Some((theme_name, session)) => Either::Right(view! {
+            <div class="mt-6">
+                <BackToThemes showing=showing/>
+                <h3 class="mt-4 text-lg font-semibold text-heading">{theme_name}</h3>
+                <div class="mt-3">
+                    <SessionRow session=session/>
                 </div>
-            }),
-        },
-        _ => EitherOf3::C(view! { <ThemeGrid groups=groups.get_value() showing=showing/> }),
+            </div>
+        }),
     }
 }
 
@@ -217,62 +225,6 @@ fn ThemeCard(group: ThemeSessions, open: Signal<bool>, showing: RwSignal<Showing
     }
 }
 
-/// The dates of one theme.
-#[component]
-fn SessionList(sessions: Vec<SessionView>) -> impl IntoView {
-    let rows = sessions
-        .into_iter()
-        .map(|session| view! { <li><SessionRow session=session/></li> })
-        .collect::<Vec<_>>();
-
-    view! { <ul class="flex flex-col gap-3">{rows}</ul> }
-}
-
-/// One date, with what it costs, what is left of it, and how to take it.
-#[component]
-fn SessionRow(session: SessionView) -> impl IntoView {
-    let full = session.is_full();
-    let availability = session.availability_label();
-    let price = session.price_label();
-
-    let action = if full {
-        Either::Left(view! {
-            <span class="inline-flex justify-center items-center px-3 h-8 text-sm font-medium rounded-md border cursor-not-allowed bg-muted text-muted-foreground">
-                "Complet"
-            </span>
-        })
-    } else {
-        Either::Right(view! {
-            // The date travels with the link: it was just chosen here, and the
-            // booking page has no reason to ask for it again.
-            <Button
-                size=ButtonSize::Sm
-                href=format!("/booking/{}?session={}", session.service_slug, session.id)
-            >
-                "Réserver"
-            </Button>
-        })
-    };
-
-    view! {
-        <div class="flex flex-wrap gap-3 justify-between items-center p-4 rounded-2xl border bg-surface text-surface-foreground border-border">
-            <div class="flex flex-col gap-1">
-                <span class="font-medium">{session.date_label}</span>
-                <span class="flex gap-2 items-center text-sm">
-                    <span class="text-muted-foreground">{price}</span>
-                    <Users class="w-3.5 h-3.5 shrink-0 text-heading-soft"/>
-                    <span class=if full {
-                        "font-medium text-destructive"
-                    } else {
-                        "text-muted-foreground"
-                    }>{availability}</span>
-                </span>
-            </div>
-            {action}
-        </div>
-    }
-}
-
 #[cfg(all(test, feature = "ssr"))]
 mod tests {
     use super::*;
@@ -292,6 +244,7 @@ mod tests {
             price: 65.0,
             max_persons: 8,
             booked_persons: 2,
+            min_persons: 1,
         }
     }
 
