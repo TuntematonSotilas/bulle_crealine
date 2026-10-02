@@ -1,5 +1,5 @@
 use icons::{ChevronDown, ImageOff};
-use leptos::either::{Either, EitherOf3};
+use leptos::either::Either;
 use leptos::prelude::*;
 
 use crate::components::blocks::session_list::{SessionList, SessionRow};
@@ -43,7 +43,7 @@ pub fn UpcomingThemes(groups: Vec<ThemeSessions>, showing: RwSignal<Showing>) ->
 
     view! {
         <section class="mx-auto mt-12 max-w-6xl">
-            <h2 class="text-2xl font-bold lg:text-3xl text-heading">"Thèmes"</h2>
+            <h2 class="text-2xl font-bold lg:text-3xl text-heading">"Prochaines séances"</h2>
             <span class="block mt-3 w-10 h-1 rounded-full bg-heading-soft"></span>
 
             {body}
@@ -59,22 +59,30 @@ pub fn UpcomingThemes(groups: Vec<ThemeSessions>, showing: RwSignal<Showing>) ->
 fn Body(groups: Vec<ThemeSessions>, showing: RwSignal<Showing>) -> impl IntoView {
     let groups = StoredValue::new(groups);
 
-    move || match showing.get() {
-        Showing::Session(id) => match find_session(&groups.get_value(), &id) {
-            // A session that no longer exists -- deleted, or simply past since the
-            // link was shared -- falls back to the grid rather than to a blank.
-            None => EitherOf3::A(view! { <ThemeGrid groups=groups.get_value() showing=showing/> }),
-            Some((theme_name, session)) => EitherOf3::B(view! {
-                <div class="mt-6">
-                    <BackToThemes showing=showing/>
-                    <h3 class="mt-4 text-lg font-semibold text-heading">{theme_name}</h3>
-                    <div class="mt-3">
-                        <SessionRow session=session/>
-                    </div>
+    // A `Memo` rather than a read of `showing` in the closure below, because there
+    // are only two shapes of page here -- one date on its own, or the grid -- and
+    // unfolding a theme moves between neither of them. Read directly, every click
+    // on a card rebuilt the whole grid: each card cloned afresh and diffed back
+    // against itself, for a state change the per-card `open` signals already carry.
+    //
+    // A session that no longer exists -- deleted, or simply past since the link was
+    // shared -- lands on `None` and so falls back to the grid rather than a blank.
+    let single = Memo::new(move |_| match showing.get() {
+        Showing::Session(id) => find_session(&groups.get_value(), &id),
+        _ => None,
+    });
+
+    move || match single.get() {
+        None => Either::Left(view! { <ThemeGrid groups=groups.get_value() showing=showing/> }),
+        Some((theme_name, session)) => Either::Right(view! {
+            <div class="mt-6">
+                <BackToThemes showing=showing/>
+                <h3 class="mt-4 text-lg font-semibold text-heading">{theme_name}</h3>
+                <div class="mt-3">
+                    <SessionRow session=session/>
                 </div>
-            }),
-        },
-        _ => EitherOf3::C(view! { <ThemeGrid groups=groups.get_value() showing=showing/> }),
+            </div>
+        }),
     }
 }
 
