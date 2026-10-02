@@ -2,15 +2,39 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::ServiceView;
 
-/// How many upcoming sessions the home page lists, every kind of workshop mixed
-/// together and soonest first.
+/// How many upcoming sessions the home page shows at a time, every kind of
+/// workshop mixed together and soonest first.
 ///
-/// The home page is a shop window, not the calendar: past the next handful of
-/// dates a visitor is better served by a workshop's own page, which the "voir +"
-/// link on each card points at. The cap is global rather than per kind, so a
-/// heavily scheduled workshop can take the whole list -- which is the point, those
-/// really are the next dates on offer.
+/// The home page opens on this many and asks for this many more each time the
+/// visitor says so. It is a shop window rather than the calendar, so the first
+/// screen stays short; a visitor who wants the whole run of dates for one workshop
+/// is still better served by its own page, which the "voir +" link on each card
+/// points at. The batch is global rather than per kind, so a heavily scheduled
+/// workshop can take the whole of one -- which is the point, those really are the
+/// next dates on offer.
 pub const HOME_SESSIONS: usize = 6;
+
+/// The most the home page will ever hand out, however many batches are asked for.
+///
+/// The count travels from the browser, so it is an untrusted number: without a
+/// ceiling a crafted request would have the server read, resolve and serialise the
+/// whole collection. Twenty batches is far past what anyone scrolls, and reaching
+/// it leaves the list simply ending -- which is what it does at the real end too.
+pub const HOME_SESSIONS_MAX: usize = HOME_SESSIONS * 20;
+
+/// One batch of the home page's upcoming sessions, and whether any follow.
+///
+/// `more` is answered by the server because only it can tell "the batch happens to
+/// be full" from "this is everything": the query asks for one session beyond the
+/// batch and reports whether it found one. Without that, the button would show on
+/// a total that is an exact multiple of the batch and then do nothing when clicked.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct UpcomingPage {
+    /// Soonest first, at most the number asked for. May be empty.
+    pub sessions: Vec<SessionView>,
+    /// Whether asking for a larger batch would bring anything new.
+    pub more: bool,
+}
 
 /// A session as the browser sees it.
 ///

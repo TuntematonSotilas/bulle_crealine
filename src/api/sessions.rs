@@ -2,7 +2,7 @@
 
 use leptos::prelude::*;
 
-use crate::models::{BookingContact, BookingOffer, SessionView};
+use crate::models::{BookingContact, BookingOffer, SessionView, UpcomingPage};
 
 /// One workshop and its upcoming dates, for the public booking page.
 ///
@@ -35,23 +35,41 @@ pub async fn upcoming_offer(service: String) -> Result<Option<BookingOffer>, Ser
     }))
 }
 
-/// The next few sessions on offer, every kind of workshop mixed together and
+/// The next `count` sessions on offer, every kind of workshop mixed together and
 /// soonest first, for the home page.
+///
+/// `count` grows by a batch each time the visitor asks for more, so this is called
+/// afresh on every click rather than paged from an offset: the whole list is read
+/// back each time. That trades a little repeated work for a list that cannot go
+/// inconsistent half way down -- an offset would skip or repeat a session whenever
+/// the admin adds or removes one between two clicks.
 ///
 /// Open to everyone, like [`upcoming_offer`].
 #[server]
-pub async fn next_sessions() -> Result<Vec<SessionView>, ServerFnError> {
+pub async fn next_sessions(count: usize) -> Result<UpcomingPage, ServerFnError> {
     use crate::api::log_failure;
     use crate::db::session;
-    use crate::models::HOME_SESSIONS;
+    use crate::models::{HOME_SESSIONS, HOME_SESSIONS_MAX};
 
-    let upcoming = session::list_next_upcoming(HOME_SESSIONS as i64)
+    // The count comes off the wire, so it is clamped rather than trusted. The floor
+    // matters as much as the ceiling: a zero would answer an empty home page.
+    let wanted = count.clamp(HOME_SESSIONS, HOME_SESSIONS_MAX);
+
+    // One beyond the batch, so that finding it is what tells a full batch from the
+    // end of the list. The extra is dropped below and never reaches the page.
+    let mut upcoming = session::list_next_upcoming(wanted as i64 + 1)
         .await
         .map_err(|error| log_failure("listing the next upcoming sessions", error))?;
 
+    let more = upcoming.len() > wanted;
+    upcoming.truncate(wanted);
+
     // Soonest first out of the query, and `with_booked_persons` keeps that order,
     // so the page can render the list as it comes.
-    with_booked_persons(upcoming).await
+    Ok(UpcomingPage {
+        sessions: with_booked_persons(upcoming).await?,
+        more,
+    })
 }
 
 /// Every session, for the admin listing.

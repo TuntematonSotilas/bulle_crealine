@@ -19,5 +19,8 @@ pub use service::{
     section_prefix, section_title, slugify,
 };
 pub use service_photo::{MAX_SERVICE_PHOTOS, ServicePhotoView};
-pub use session::{BookingOffer, HOME_SESSIONS, SessionView, ThemeSessions, group_by_theme};
+pub use session::{
+    BookingOffer, HOME_SESSIONS, HOME_SESSIONS_MAX, SessionView, ThemeSessions, UpcomingPage,
+    group_by_theme,
+};
 pub use theme::{AffectedSession, MAX_PHOTO_BYTES, MAX_PHOTO_LABEL, ThemeView};
