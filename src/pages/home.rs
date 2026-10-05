@@ -2,6 +2,7 @@ use leptos::prelude::*;
 
 use crate::api::sessions::next_sessions;
 use crate::components::blocks::SessionCard;
+use crate::components::seo::PageMeta;
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 use crate::models::{HOME_CARDS, SessionGroup};
 
@@ -23,14 +24,35 @@ pub fn HomePage() -> impl IntoView {
     });
 
     view! {
+        <PageMeta
+            title="Ateliers créatifs à Feurs (42) — Bulle Créaline (E.I)"
+            description="Ateliers créatifs bien-être à Feurs, dans la Loire : parents-enfants, apéros créatifs entre adultes, accompagnements individuels et ateliers en institution."
+            path="/"
+        />
+
         <div class="home-hero border border-(--border) rounded-[2rem] shadow-(--shadow) max-w-4xl mx-auto">
-            <h2 class="home-hero-title">
+            // The page's one `h1`, and the only heading on the site that may be
+            // just the name: it is the home page, and the name is what it is about.
+            <h1 class="home-hero-title">
                 "Bulle Créaline"
                 <span class="home-hero-suffix">"(E.I)"</span>
-            </h2>
-            <h3>"Ma source de créativité"</h3>
-            <h3>"Ateliers créatifs bien-être"</h3>
+            </h1>
+            // Taglines, not sections. They were `h3` under an `h2`, which made the
+            // page look like it had three levels of structure and no subject.
+            <p>"Ma source de créativité"</p>
+            <p>"Ateliers créatifs bien-être"</p>
         </div>
+
+        // Nothing on this page used to say where the workshops are held. A visitor
+        // could tell from the booking form, three clicks in; a search engine could
+        // not tell at all.
+        <p class="mx-auto mt-8 max-w-3xl text-lg leading-8 text-center text-muted-foreground">
+            "Bulle Créaline est un atelier créatif installé à Feurs, dans la Loire. J'y anime
+             des ateliers parents-enfants, des après-midis et apéros créatifs entre adultes et
+             des accompagnements individuels, et je me déplace en institution ou hors les murs.
+             Chaque séance est un temps pour soi : on crée, on souffle, et on repart avec
+             quelque chose fait de ses mains."
+        </p>
 
         // A `Transition` rather than a `Suspense` so that asking for more leaves the
         // cards already on screen where they are: the fallback below is for the
@@ -141,6 +163,51 @@ mod tests {
     /// The wording of the button that asks the server for another batch, kept
     /// apart from the "voir +" each card carries towards its workshop's page.
     const MORE: &str = "Voir plus de séances";
+
+    /// The hero on its own, resources and all.
+    ///
+    /// With no storage configured the resource resolves to an error and the
+    /// `Transition` renders nothing, which is all this needs: the hero and the
+    /// paragraph under it are synchronous, and they are what is being asserted.
+    fn hero_html() -> String {
+        use leptos_router::components::Router;
+        use leptos_router::location::RequestUrl;
+
+        crate::pages::admin::init_test_executor();
+
+        Owner::new().with(|| {
+            provide_context(RequestUrl::new("/"));
+
+            view! { <Router><HomePage/></Router> }.to_html()
+        })
+    }
+
+    /// Every page owes a crawler one `h1`, and this is the page that most needs to
+    /// say what the site is. It had none: the hero was an `h2` under a title that
+    /// said nothing but the business name.
+    #[test]
+    fn the_home_page_opens_on_a_single_h1() {
+        let html = hero_html();
+
+        assert_eq!(html.matches("<h1").count(), 1, "not exactly one h1: {html}");
+        assert!(html.contains("Bulle Créaline"), "{html}");
+    }
+
+    /// Nothing on this page used to say where the workshops are held -- not the
+    /// town, not the département, not the address. A visitor could find out three
+    /// clicks in, from the booking form; a search engine could not find out at all.
+    #[test]
+    fn the_home_page_says_where_the_workshops_are_held() {
+        let html = hero_html();
+
+        assert!(html.contains("Feurs"), "the town is not named: {html}");
+        assert!(html.contains("Loire"), "the département is not named: {html}");
+    }
+
+    // That the page sets a title, a description and a canonical is asserted where
+    // the tags can actually be seen -- in `components::seo`, which splices them into
+    // a head the way the server does. They render nothing where they stand, so no
+    // assertion on this page's own HTML could tell a correct one from a missing one.
 
     /// Whether the button carries the `disabled` attribute.
     ///

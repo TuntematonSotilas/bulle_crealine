@@ -1,6 +1,6 @@
 use leptos::prelude::*;
-use leptos_meta::Title;
 
+use crate::components::seo::PageMeta;
 use crate::models::OWNER;
 
 /// How long a booking is kept, counted from the last contact.
@@ -22,7 +22,11 @@ const RETENTION: &str = "3 ans à compter du dernier contact";
 #[component]
 pub fn MentionsLegales() -> impl IntoView {
     view! {
-        <Title text="Mentions légales — Bulle Créaline (E.I)"/>
+        <PageMeta
+            title="Mentions légales — Bulle Créaline (E.I)"
+            description="Mentions légales et politique de confidentialité de Bulle Créaline (E.I) : éditeur, hébergeur, données personnelles collectées, durée de conservation et droits."
+            path="/mentions-legales"
+        />
 
         <div class="py-6 mx-auto space-y-10 max-w-3xl">
             <div class="space-y-4 text-center">

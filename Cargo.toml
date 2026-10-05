@@ -54,6 +54,10 @@ serde_json = "1.0"
 # Rendering a component that owns a `Resource` needs a spawner; leptos pulls this
 # crate in already, tests just need to name it to start one.
 any_spawner = { version = "0.3.0", features = ["futures-executor"] }
+# Drives `inject_meta_context`, which is async: it is the only way to see what a page
+# actually puts in the `<head>`, the tags being collected rather than rendered in
+# place. Already in the lock file, by way of the crate above.
+futures-executor = "0.3.31"
 
 # Generates ADMIN_PASSWORD_HASH and ADMIN_SESSION_SECRET (see README).
 [[example]]

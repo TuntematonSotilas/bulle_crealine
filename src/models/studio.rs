@@ -54,6 +54,27 @@ impl Studio {
     }
 }
 
+/// Where this site answers, with no trailing slash.
+///
+/// A constant rather than an environment variable, because [`crate::app`] is compiled
+/// twice -- once for the server and once for WASM -- and `std::env::var` on
+/// `wasm32-unknown-unknown` compiles happily and then always answers `Err`. The two
+/// builds would disagree about every canonical URL, and hydration would patch a
+/// `<head>` the server had just got right. One value both builds read is the only
+/// shape that cannot drift.
+///
+/// The day a domain of its own is attached, this line is what changes -- the
+/// canonicals, the `og:url` and the sitemap all read it through [`site_url`].
+pub const SITE_ORIGIN: &str = "https://bulle-crealine.onrender.com";
+
+/// An absolute URL for a path rooted at the site.
+///
+/// `path` starts with `/`, so `site_url("/")` gives the origin with its trailing
+/// slash, which is what the home page's canonical has to be.
+pub fn site_url(path: &str) -> String {
+    format!("{SITE_ORIGIN}{path}")
+}
+
 /// The one studio this site is about.
 pub const OWNER: Studio = Studio {
     owner: "Coraline Batault",
@@ -98,5 +119,15 @@ mod tests {
     #[test]
     fn the_email_opens_a_message() {
         assert_eq!(OWNER.email_link(), "mailto:bulle.crealine@gmail.com");
+    }
+
+    /// Every caller joins the origin to a path that already starts with a slash. An
+    /// origin carrying one of its own would double it, and two spellings of one URL
+    /// is the whole thing a canonical exists to prevent.
+    #[test]
+    fn an_address_is_joined_with_exactly_one_slash() {
+        assert!(!SITE_ORIGIN.ends_with('/'), "{SITE_ORIGIN} should not end in a slash");
+        assert_eq!(site_url("/"), format!("{SITE_ORIGIN}/"));
+        assert_eq!(site_url("/contact"), format!("{SITE_ORIGIN}/contact"));
     }
 }

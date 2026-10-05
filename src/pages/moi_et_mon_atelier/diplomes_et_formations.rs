@@ -1,5 +1,7 @@
 use leptos::prelude::*;
 
+use crate::components::seo::PageMeta;
+
 /// How much room a qualification is given, and so how much weight it carries.
 ///
 /// Two steps rather than a scale: the page says what it is built on and what rounds
@@ -147,6 +149,12 @@ pub fn DiplomesEtFormationsPage() -> impl IntoView {
         .collect::<Vec<_>>();
 
     view! {
+        <PageMeta
+            title="Diplômes et formations — Bulle Créaline (E.I)"
+            description="Les diplômes et formations de Coraline Batault : médiation artistique, animation sociale, communication non verbale et histoire de l'art."
+            path="/moi-et-mon-atelier/diplomes-et-formations"
+        />
+
         <div class="mx-auto max-w-6xl space-y-10 py-6">
             <div class="space-y-4 text-center">
                 <p class="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">

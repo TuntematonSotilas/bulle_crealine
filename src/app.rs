@@ -16,15 +16,18 @@ pub fn App() -> impl IntoView {
     provide_context(ThemeMode::init());
 
     view! {
-        // sets the document title
+        // The fallback title, for a page that sets none of its own. A title is a
+        // single slot where the last writer wins, so a page's own `PageMeta`
+        // replaces this one rather than adding to it.
         <Title text="Bulle Créaline (E.I)"/>
 
-        <Meta property="og:title" content="Bulle Créaline (E.I)" />
-        <Meta property="og:url" content="https://bulle-crealine.onrender.com" />
-        <Meta property="og:image" content="https://bulle-crealine.onrender.com/assets/meta.png" />
-        <Meta property="og:description" content="Ateliers créatifs à Feurs" />
+        // Only what no page overrides. `leptos_meta` keeps `<Meta>` in an
+        // append-only buffer with no deduplication, so anything set here *and* by
+        // `PageMeta` would reach the HTML twice -- which is why `og:title`,
+        // `og:url`, `og:description` and `og:image` are the page's business alone.
         <Meta property="og:site_name" content="Bulle Créaline (E.I)" />
         <Meta property="og:type" content="website" />
+        <Meta property="og:locale" content="fr_FR" />
 
         // content for this welcome page
         <Router>
@@ -40,6 +43,8 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/pro/:slug") view=ServicePage/>
 
                     <Route path=path!("/moi-et-mon-atelier/qui-suis-je") view=QuiSuisJePage/>
+                    <Route path=path!("/moi-et-mon-atelier/mon-atelier") view=MonAtelierPage/>
+                    <Route path=path!("/moi-et-mon-atelier/photos") view=PhotosPage/>
                     <Route path=path!("/moi-et-mon-atelier/diplomes-et-formations") view=DiplomesEtFormationsPage/>
                     <Route path=path!("/moi-et-mon-atelier/catalogue") view=CataloguePage/>
                     

@@ -1,13 +1,13 @@
 use icons::Check;
 use leptos::either::{Either, EitherOf3};
 use leptos::prelude::*;
-use leptos_meta::Title;
 use leptos_router::hooks::{use_params_map, use_query_map};
 
 use crate::api::bookings::CreateBooking;
 use crate::api::sessions::upcoming_offer;
 use crate::auth::user_message;
 use crate::components::blocks::studio_place::StudioPlace;
+use crate::components::seo::PageMeta;
 use crate::components::ui::alert::{Alert, AlertDescription, AlertTitle, AlertVariant};
 use crate::components::ui::button::Button;
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
@@ -36,7 +36,15 @@ pub fn BookingPage() -> impl IntoView {
     let chosen = use_query_map().get_untracked().get("session");
 
     view! {
-        <Title text="Réserver un atelier — Bulle Créaline (E.I)"/>
+        // `noindex`: a form has nothing to rank, and the one worth finding is the
+        // workshop's own page, which links here. `follow` so the links out of it
+        // still count.
+        <PageMeta
+            title="Réserver un atelier — Bulle Créaline (E.I)"
+            description="Réserver une séance d'atelier créatif chez Bulle Créaline, à Feurs."
+            path="/booking"
+            noindex=true
+        />
 
         <Transition fallback=|| {
             view! {

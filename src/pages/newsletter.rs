@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 
+use crate::components::seo::PageMeta;
 use crate::components::ui::{button::{Button, ButtonSize}, input::Input};
 
 /// Renders the newsletter subscription page.
@@ -7,6 +8,15 @@ use crate::components::ui::{button::{Button, ButtonSize}, input::Input};
 pub fn NewsletterPage() -> impl IntoView {
     
     view! {
+        // `noindex`: the form posts nowhere yet. A page that cannot do what it
+        // announces is a page a search result should not send anyone to.
+        <PageMeta
+            title="Newsletter — Bulle Créaline (E.I)"
+            description="S'inscrire à la newsletter de Bulle Créaline pour suivre les prochaines séances d'ateliers créatifs à Feurs."
+            path="/newsletter"
+            noindex=true
+        />
+
         <div>
             <h1>Notre Newsletter</h1>
 

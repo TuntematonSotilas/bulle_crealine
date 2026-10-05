@@ -21,5 +21,5 @@ pub use mentions_legales::MentionsLegales;
 pub use service::ServicePage;
 pub use moi_et_mon_atelier::{
     catalogue::CataloguePage, diplomes_et_formations::DiplomesEtFormationsPage,
-    qui_suis_je::QuiSuisJePage,
+    mon_atelier::MonAtelierPage, photos::PhotosPage, qui_suis_je::QuiSuisJePage,
 };

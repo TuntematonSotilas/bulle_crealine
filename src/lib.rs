@@ -12,6 +12,8 @@ pub mod db;
 pub mod media;
 pub mod models;
 pub mod pages;
+#[cfg(feature = "ssr")]
+pub mod seo;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]

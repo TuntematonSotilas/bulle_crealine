@@ -1,8 +1,8 @@
 use icons::{Mail, Phone};
 use leptos::prelude::*;
-use leptos_meta::Title;
 
 use crate::components::blocks::studio_place::StudioPlace;
+use crate::components::seo::PageMeta;
 use crate::models::OWNER;
 
 /// Renders the "Contact" page.
@@ -17,7 +17,11 @@ use crate::models::OWNER;
 #[component]
 pub fn ContactPage() -> impl IntoView {
     view! {
-        <Title text="Contact — Bulle Créaline (E.I)"/>
+        <PageMeta
+            title="Contact — Bulle Créaline, ateliers créatifs à Feurs"
+            description="Joindre Coraline Batault : téléphone, email et adresse de l'atelier Bulle Créaline, 5 rue Marc Seguin à Feurs (42110), dans la Loire."
+            path="/contact"
+        />
 
         <div class="py-6 mx-auto space-y-10 max-w-3xl">
             <div class="space-y-4 text-center">
