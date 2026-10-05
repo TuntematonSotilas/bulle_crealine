@@ -1,3 +1,7 @@
+// The binary is its own crate root, so `lib.rs` setting this does not reach it: the
+// router composes every page into one type, and each page added makes it deeper.
+#![recursion_limit = "512"]
+
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

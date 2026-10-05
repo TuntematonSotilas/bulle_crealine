@@ -196,14 +196,14 @@ mod tests {
     /// wrong answer rather than a missing one.
     #[test]
     fn only_a_bookable_workshop_announces_the_studio() {
-        use crate::models::STUDIO_ADDRESS;
+        use crate::models::OWNER;
 
         assert!(
-            block_html(service(false)).contains(STUDIO_ADDRESS),
+            block_html(service(false)).contains(OWNER.address),
             "the address should show on a bookable workshop"
         );
         assert!(
-            !block_html(service(true)).contains(STUDIO_ADDRESS),
+            !block_html(service(true)).contains(OWNER.address),
             "a workshop for structures is not held there"
         );
     }

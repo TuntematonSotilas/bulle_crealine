@@ -47,6 +47,21 @@ réservation et d'administration signalent que les données sont inaccessibles.
     $env:MONGODB_URI = "mongodb+srv://..."
     cargo leptos watch
 
+## Mentions légales : ce qu'il reste à compléter
+
+`/mentions-legales` est servie et complète, **à deux mentions près** : le SIRET et le
+statut TVA portent `[À COMPLÉTER]` et s'affichent tels quels. Tant que le SIRET manque,
+**la page ne satisfait pas l'article 6-III de la LCEN.**
+
+Les deux se remplissent au même endroit, dans `OWNER` ([src/models/studio.rs]) — une
+chaîne chacun, rien d'autre à toucher. Pour la TVA, c'est soit le numéro
+intracommunautaire, soit la phrase « TVA non applicable, article 293 B du CGI », jamais
+le vide.
+
+La page annonce par ailleurs une conservation des réservations de **3 ans après le
+dernier contact**. Rien ne l'applique aujourd'hui : `booking::delete` est un effacement
+logique, le document reste. La promesse est donc faite et pas encore tenue.
+
 ## Administration
 
 Il n'y a qu'un seul compte admin, défini par trois variables d'environnement — pas de

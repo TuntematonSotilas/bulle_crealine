@@ -4,6 +4,7 @@ pub mod home;
 pub mod not_found;
 pub mod newsletter;
 pub mod service;
+pub mod contact;
 pub mod mentions_legales;
 pub mod moi_et_mon_atelier;
 
@@ -15,6 +16,7 @@ pub use booking::BookingPage;
 pub use home::HomePage;
 pub use not_found::NotFound;
 pub use newsletter::NewsletterPage;
+pub use contact::ContactPage;
 pub use mentions_legales::MentionsLegales;
 pub use service::ServicePage;
 pub use moi_et_mon_atelier::{
