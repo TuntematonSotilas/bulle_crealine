@@ -16,7 +16,7 @@ use crate::models::{ServiceView, is_valid_slug, site_url};
 /// knows the shapes, not which of them is worth indexing -- it would offer `/admin`,
 /// `/booking/:service` and the wildcard just the same. The workshops are the part
 /// that changes, and those are read from storage.
-const STATIC_PATHS: [&str; 8] = [
+const STATIC_PATHS: [&str; 9] = [
     "/",
     "/moi-et-mon-atelier/qui-suis-je",
     "/moi-et-mon-atelier/mon-atelier",
@@ -25,6 +25,7 @@ const STATIC_PATHS: [&str; 8] = [
     "/moi-et-mon-atelier/catalogue",
     "/contact",
     "/mentions-legales",
+    "/politique-de-confidentialite",
 ];
 
 /// `GET /robots.txt` -- where crawlers may go, and where the map is.

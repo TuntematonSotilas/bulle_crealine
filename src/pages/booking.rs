@@ -328,8 +328,11 @@ fn BookingForm(
                                 // markup. The browser folds them away, so only a test
                                 // searching for the sentence would ever notice.
                                 "Vos coordonnées servent uniquement à gérer cette réservation et ne sont transmises à personne. "
+                                // The policy, not the legal notice: what is being
+                                // asked about here is the data, and that is where it
+                                // is answered since the two pages were split.
                                 <a
-                                    href="/mentions-legales"
+                                    href="/politique-de-confidentialite"
                                     class="underline underline-offset-4 hover:text-heading"
                                 >
                                     "En savoir plus"
@@ -643,7 +646,7 @@ mod tests {
             "the form explains nothing: {html}"
         );
         assert!(
-            html.contains(r#"href="/mentions-legales""#),
+            html.contains(r#"href="/politique-de-confidentialite""#),
             "and leads nowhere for the rest: {html}"
         );
     }

@@ -54,6 +54,31 @@ impl Studio {
     }
 }
 
+/// A service the site runs on.
+///
+/// Named by two pages that answer to two different laws: the legal notice has to say
+/// who hosts the site, and the privacy policy has to say where the data sits. The
+/// second is the one that decides whether anything must be said about transfers out
+/// of the Union, and it is the one that would quietly go stale if each page spelled
+/// it out for itself.
+pub struct Host {
+    pub name: &'static str,
+    /// Where the servers actually stand -- not where the company is registered.
+    pub location: &'static str,
+}
+
+/// Where the site runs.
+pub const APP_HOST: Host = Host {
+    name: "Render Services, Inc.",
+    location: "Francfort (Allemagne)",
+};
+
+/// Where the bookings are stored.
+pub const DATA_HOST: Host = Host {
+    name: "MongoDB, Inc.",
+    location: "Paris (France)",
+};
+
 /// Where this site answers, with no trailing slash.
 ///
 /// A constant rather than an environment variable, because [`crate::app`] is compiled

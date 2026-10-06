@@ -51,6 +51,7 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/newsletter") view=NewsletterPage/>
                     <Route path=path!("/contact") view=ContactPage/>
                     <Route path=path!("/mentions-legales") view=MentionsLegales/>
+                    <Route path=path!("/politique-de-confidentialite") view=PrivacyPolicyPage/>
                     
                     <Route path=path!("/booking/:service") view=BookingPage/>
                     <Route path=path!("/admin") view=AdminPage/>

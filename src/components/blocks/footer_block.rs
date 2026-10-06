@@ -18,11 +18,14 @@ pub fn FooterBlock() -> impl IntoView {
                     </div>
                 </FooterBrandLink>
                 // Ordered by who needs them: a visitor wanting to get in touch, then
-                // the notice the law requires to be reachable from everywhere, then
-                // the way in for the one person who administers the site.
+                // the two notices the law requires to be reachable from everywhere,
+                // then the way in for the one person who administers the site.
                 <FooterNavContainer>
                     <FooterLink attr:href="/contact">Contact</FooterLink>
                     <FooterLink attr:href="/mentions-legales">Mentions légales</FooterLink>
+                    <FooterLink attr:href="/politique-de-confidentialite">
+                        "Politique de confidentialité"
+                    </FooterLink>
                     <FooterLink attr:href="/admin">Espace admin</FooterLink>
                 </FooterNavContainer>
                 <FooterNavContainer>
@@ -59,7 +62,7 @@ mod tests {
     fn the_footer_leads_everywhere_it_has_to() {
         let html = footer_html();
 
-        for path in ["/contact", "/mentions-legales", "/admin"] {
+        for path in ["/contact", "/mentions-legales", "/politique-de-confidentialite", "/admin"] {
             assert!(
                 html.contains(&format!(r#"href="{path}""#)),
                 "{path} is unreachable from the footer: {html}"
@@ -79,6 +82,10 @@ mod tests {
         };
 
         assert!(at("/contact") < at("/mentions-legales"), "contact comes first: {html}");
-        assert!(at("/mentions-legales") < at("/admin"), "admin comes last: {html}");
+        assert!(
+            at("/mentions-legales") < at("/politique-de-confidentialite"),
+            "the notices stay in the order they were split: {html}"
+        );
+        assert!(at("/politique-de-confidentialite") < at("/admin"), "admin comes last: {html}");
     }
 }

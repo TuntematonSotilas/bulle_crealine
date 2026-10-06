@@ -47,58 +47,6 @@ réservation et d'administration signalent que les données sont inaccessibles.
     $env:MONGODB_URI = "mongodb+srv://..."
     cargo leptos watch
 
-## Mentions légales : ce qu'il reste à compléter
-
-`/mentions-legales` est servie et complète, **à deux mentions près** : le SIRET et le
-statut TVA portent `[À COMPLÉTER]` et s'affichent tels quels. Tant que le SIRET manque,
-**la page ne satisfait pas l'article 6-III de la LCEN.**
-
-Les deux se remplissent au même endroit, dans `OWNER` ([src/models/studio.rs]) — une
-chaîne chacun, rien d'autre à toucher. Pour la TVA, c'est soit le numéro
-intracommunautaire, soit la phrase « TVA non applicable, article 293 B du CGI », jamais
-le vide.
-
-La page annonce par ailleurs une conservation des réservations de **3 ans après le
-dernier contact**. Rien ne l'applique aujourd'hui : `booking::delete` est un effacement
-logique, le document reste. La promesse est donc faite et pas encore tenue.
-
-## Référencement (SEO)
-
-Chaque page publique déclare son titre, sa description et son adresse canonique via
-`PageMeta` ([src/components/seo.rs]). Trois règles, qui ne sont pas optionnelles :
-
-1. **Les balises doivent être rendues de façon synchrone.** `leptos_meta` n'injecte
-   dans le `<head>` que ce qui a été rendu dans le **premier chunk** du flux SSR. Un
-   `<Title>` posé dans un `Suspend` n'y arrive jamais — c'était le cas des pages
-   d'atelier, qui partaient toutes avec le titre générique du site. Quand le texte
-   dépend de données stockées, la ressource doit être une `Resource::new_blocking`,
-   qui retient le premier chunk jusqu'à sa résolution. Même piège pour le statut HTTP :
-   un `NotFound` dans un `Suspend` répondait 200.
-2. **Rien de ce que `PageMeta` pose ne doit l'être aussi globalement.** `<Meta>` et
-   `<Link>` s'accumulent sans dédoublonnage : une balise posée ici *et* dans
-   [src/app.rs] apparaîtrait deux fois. `app.rs` ne garde que `og:site_name`,
-   `og:type` et `og:locale`, qu'aucune page ne redéfinit. `<Title>` fait exception —
-   c'est un emplacement unique où le dernier écrivain gagne.
-3. **L'adresse du site est une constante**, `SITE_ORIGIN` dans
-   [src/models/studio.rs]. Pas une variable d'environnement : `app.rs` est compilé
-   aussi pour le WASM, où `std::env::var` répond toujours `Err`. Le jour où un domaine
-   propre est attaché, cette ligne est la seule à changer — plus une redirection 301
-   depuis l'ancien hôte, à poser côté Cloudflare.
-
-`/robots.txt` et `/sitemap.xml` sont des routes actix ([src/seo.rs]), pas des fichiers
-d'`assets/` : ce répertoire est monté sous `/assets`, où aucun robot ne va les chercher.
-Le sitemap est reconstruit à chaque requête depuis la base, et liste chaque atelier sous
-le seul préfixe de sa section.
-
-**Ce qui reste à faire, et qui ne passe pas par le code :** pour une activité locale, une
-**fiche Google Business Profile** vérifiée (mêmes coordonnées que `OWNER`, horaires,
-photos, lien vers le site) pèse plus lourd que tout ce qui précède. Et le site est à
-déposer dans la **Google Search Console**, où le sitemap se soumet.
-
-Le texte de `/moi-et-mon-atelier/mon-atelier` est un brouillon tiré de ce que le site
-dit déjà de lui-même : il n'affirme rien de neuf sur le lieu, faute de le savoir. À
-réécrire.
-
 ## Administration
 
 Il n'y a qu'un seul compte admin, défini par trois variables d'environnement — pas de

@@ -46,7 +46,7 @@ pub fn HomePage() -> impl IntoView {
         // Nothing on this page used to say where the workshops are held. A visitor
         // could tell from the booking form, three clicks in; a search engine could
         // not tell at all.
-        <p class="mx-auto mt-8 max-w-3xl text-lg leading-8 text-center text-muted-foreground">
+        <p class="mx-auto mt-8 max-w-3xl text-base leading-7 text-center text-muted-foreground">
             "Bulle Créaline est un atelier créatif installé à Feurs, dans la Loire. J'y anime
              des ateliers parents-enfants, des après-midis et apéros créatifs entre adultes et
              des accompagnements individuels, et je me déplace en institution ou hors les murs.

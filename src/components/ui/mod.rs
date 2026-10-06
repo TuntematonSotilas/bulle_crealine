@@ -3,6 +3,7 @@ pub mod button;
 pub mod card;
 pub mod date_picker;
 pub mod label;
+pub mod lines;
 pub mod navigation_menu;
 pub mod number_field;
 pub mod select;
