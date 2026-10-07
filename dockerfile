@@ -1,5 +1,5 @@
 # Get started with a build env with Rust nightly
-FROM rust:1.95.0-alpine3.22 AS builder
+FROM rust:1.97.1-alpine3.22 AS builder
 
 RUN apk update && \
     apk add --no-cache bash curl npm libc-dev binaryen perl make
@@ -17,7 +17,7 @@ RUN npm i
 
 RUN cargo leptos build --release
 
-FROM rust:1.95.0-alpine3.22 AS runner
+FROM rust:1.97.1-alpine3.22 AS runner
 
 WORKDIR /app
 
