@@ -4,7 +4,9 @@ pub mod home;
 pub mod not_found;
 pub mod newsletter;
 pub mod service;
+pub mod contact;
 pub mod mentions_legales;
+pub mod privacy_policy;
 pub mod moi_et_mon_atelier;
 
 pub use admin::{
@@ -15,9 +17,11 @@ pub use booking::BookingPage;
 pub use home::HomePage;
 pub use not_found::NotFound;
 pub use newsletter::NewsletterPage;
+pub use contact::ContactPage;
 pub use mentions_legales::MentionsLegales;
+pub use privacy_policy::PrivacyPolicyPage;
 pub use service::ServicePage;
 pub use moi_et_mon_atelier::{
     catalogue::CataloguePage, diplomes_et_formations::DiplomesEtFormationsPage,
-    qui_suis_je::QuiSuisJePage,
+    mon_atelier::MonAtelierPage, photos::PhotosPage, qui_suis_je::QuiSuisJePage,
 };

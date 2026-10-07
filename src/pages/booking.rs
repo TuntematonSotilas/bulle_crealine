@@ -1,13 +1,13 @@
 use icons::Check;
 use leptos::either::{Either, EitherOf3};
 use leptos::prelude::*;
-use leptos_meta::Title;
 use leptos_router::hooks::{use_params_map, use_query_map};
 
 use crate::api::bookings::CreateBooking;
 use crate::api::sessions::upcoming_offer;
 use crate::auth::user_message;
 use crate::components::blocks::studio_place::StudioPlace;
+use crate::components::seo::PageMeta;
 use crate::components::ui::alert::{Alert, AlertDescription, AlertTitle, AlertVariant};
 use crate::components::ui::button::Button;
 use crate::components::ui::card::{Card, CardContent, CardDescription, CardHeader, CardTitle};
@@ -36,7 +36,15 @@ pub fn BookingPage() -> impl IntoView {
     let chosen = use_query_map().get_untracked().get("session");
 
     view! {
-        <Title text="Réserver un atelier — Bulle Créaline (E.I)"/>
+        // `noindex`: a form has nothing to rank, and the one worth finding is the
+        // workshop's own page, which links here. `follow` so the links out of it
+        // still count.
+        <PageMeta
+            title="Réserver un atelier — Bulle Créaline (E.I)"
+            description="Réserver une séance d'atelier créatif chez Bulle Créaline, à Feurs."
+            path="/booking"
+            noindex=true
+        />
 
         <Transition fallback=|| {
             view! {
@@ -308,6 +316,29 @@ fn BookingForm(
                                     if pending.get() { "Envoi…" } else { "Réserver" }
                                 }}
                             </Button>
+
+                            // Article 13 asks that this be said where the details are
+                            // handed over, not only in a footer. No tick box beside
+                            // it: the legal basis is the contract, so there is nothing
+                            // to consent to -- and a box would suggest one could
+                            // decline and book anyway.
+                            <p class="text-xs leading-relaxed text-muted-foreground">
+                                // One line, deliberately: a Rust literal broken across
+                                // two carries the newline and the indentation into the
+                                // markup. The browser folds them away, so only a test
+                                // searching for the sentence would ever notice.
+                                "Vos coordonnées servent uniquement à gérer cette réservation et ne sont transmises à personne. "
+                                // The policy, not the legal notice: what is being
+                                // asked about here is the data, and that is where it
+                                // is answered since the two pages were split.
+                                <a
+                                    href="/politique-de-confidentialite"
+                                    class="underline underline-offset-4 hover:text-heading"
+                                >
+                                    "En savoir plus"
+                                </a>
+                                "."
+                            </p>
 
                         </div>
                     </ActionForm>
@@ -604,6 +635,33 @@ mod tests {
         assert!(html.contains("Choisir une autre date"), "no way back: {html}");
     }
 
+    /// Article 13 asks that the visitor be told where the details are handed over,
+    /// not only in a footer three clicks away.
+    #[test]
+    fn the_form_says_what_becomes_of_what_it_asks_for() {
+        let html = form_with(None);
+
+        assert!(
+            html.contains("gérer cette réservation"),
+            "the form explains nothing: {html}"
+        );
+        assert!(
+            html.contains(r#"href="/politique-de-confidentialite""#),
+            "and leads nowhere for the rest: {html}"
+        );
+    }
+
+    /// The legal basis is the contract, not consent: the details are needed to run
+    /// the workshop at all. A tick box would suggest one could decline and book
+    /// anyway, which is the mistake this guards against.
+    #[test]
+    fn the_form_asks_for_no_consent_it_could_not_honour() {
+        let html = form_with(None);
+
+        assert!(!html.contains(r#"type="checkbox""#), "no box belongs here: {html}");
+        assert!(!html.contains("J'autorise"), "nor anything asking to allow: {html}");
+    }
+
     /// A link outlives the date it carries. An id nobody recognises has to leave
     /// the visitor picking from the list rather than facing an empty form.
     #[test]
@@ -628,19 +686,19 @@ mod tests {
     /// Where to turn up is part of choosing a date, not an afterthought.
     #[test]
     fn the_form_says_where_the_session_is_held() {
-        use crate::models::{STUDIO_ADDRESS, STUDIO_MAP_URL};
+        use crate::models::OWNER;
 
         let html = form_html();
 
-        assert!(html.contains(STUDIO_ADDRESS), "no address: {html}");
-        assert!(html.contains(STUDIO_MAP_URL), "no map link: {html}");
+        assert!(html.contains(OWNER.address), "no address: {html}");
+        assert!(html.contains(OWNER.map_url), "no map link: {html}");
     }
 
     /// This screen replaces the form outright, so an address shown only on the
     /// form disappears exactly when the visitor starts needing it.
     #[test]
     fn the_confirmation_repeats_where_to_go() {
-        use crate::models::STUDIO_ADDRESS;
+        use crate::models::OWNER;
         use leptos_router::components::Router;
         use leptos_router::location::RequestUrl;
 
@@ -661,7 +719,7 @@ mod tests {
         });
 
         assert!(html.contains("Votre réservation est enregistrée"), "{html}");
-        assert!(html.contains(STUDIO_ADDRESS), "no address: {html}");
+        assert!(html.contains(OWNER.address), "no address: {html}");
     }
 
     /// A field that no longer refuses to submit has to say so, or it still reads

@@ -66,15 +66,6 @@ pub fn section_title(pro: bool) -> &'static str {
     if pro { "Autres Ateliers" } else { "Ateliers à domicile" }
 }
 
-/// Where the workshops open to booking are held.
-///
-/// A constant rather than a field: every bookable workshop runs at this one
-/// address, and a workshop run for a structure takes place at the structure's, so
-/// there is nothing to choose per row. A second venue would make it a field.
-pub const STUDIO_ADDRESS: &str = "Bulle Créaline (E.I), 5 Rue Marc Seguin, 42110 Feurs";
-
-/// The same address on a map, for whoever would rather be guided than read.
-pub const STUDIO_MAP_URL: &str = "https://maps.app.goo.gl/Fgmpg9RF8HiPGrkf7";
 
 /// Whether a slug is safe to put in a URL and to store.
 ///

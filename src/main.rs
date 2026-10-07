@@ -1,3 +1,7 @@
+// The binary is its own crate root, so `lib.rs` setting this does not reach it: the
+// router composes every page into one type, and each page added makes it deeper.
+#![recursion_limit = "512"]
+
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -11,6 +15,7 @@ async fn main() -> std::io::Result<()> {
     use bulle_crealine::auth::{config::AdminConfig, middleware::admin_guard};
     use bulle_crealine::cache::{cache_headers, set_bundle_is_stamped};
     use bulle_crealine::media;
+    use bulle_crealine::seo;
 
     let mut conf = get_configuration(None).unwrap();
 
@@ -68,6 +73,12 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("/assets", &site_root))
             // serve the favicon from /favicon.ico
             .service(favicon)
+            // What crawlers read, rooted and ahead of the router: `assets` is
+            // mounted under `/assets`, so a file dropped in that directory would
+            // answer on `/assets/robots.txt`, and the router's wildcard route would
+            // otherwise swallow both of these into the "not found" page.
+            .route("/robots.txt", web::get().to(seo::robots))
+            .route("/sitemap.xml", web::get().to(seo::sitemap))
             // serve theme photos, which live in Mongo rather than on disk
             .route("/media/theme/{id}", web::get().to(media::theme_photo))
             // the same, for the photos of a workshop run for a structure

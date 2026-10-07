@@ -1,7 +1,7 @@
 use icons::MapPin;
 use leptos::prelude::*;
 
-use crate::models::{STUDIO_ADDRESS, STUDIO_MAP_URL};
+use crate::models::OWNER;
 
 /// Where a bookable workshop is held, with the address linked to a map.
 ///
@@ -19,13 +19,13 @@ pub fn StudioPlace() -> impl IntoView {
                 "Lieu"
             </div>
             <a
-                href=STUDIO_MAP_URL
+                href=OWNER.map_url
                 target="_blank"
                 rel="noreferrer noopener"
                 class="inline-flex gap-2 items-center mt-1 font-medium transition-colors hover:text-heading"
             >
                 <MapPin class="w-4 h-4 flex-shrink-0"/>
-                <span class="underline">{STUDIO_ADDRESS}</span>
+                <span class="underline">{OWNER.address}</span>
                 // The link leaves the site for a new tab, which nothing else here
                 // would announce.
                 <span class="sr-only">" (nouvel onglet)"</span>
@@ -46,8 +46,8 @@ mod tests {
     fn the_address_is_shown_and_linked_to_a_map() {
         let html = html();
 
-        assert!(html.contains(STUDIO_ADDRESS), "no address: {html}");
-        assert!(html.contains(STUDIO_MAP_URL), "no map link: {html}");
+        assert!(html.contains(OWNER.address), "no address: {html}");
+        assert!(html.contains(OWNER.map_url), "no map link: {html}");
     }
 
     /// A tab opening behind the page is a surprise worth naming, and `noopener`

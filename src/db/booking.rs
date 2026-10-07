@@ -201,6 +201,32 @@ pub async fn soft_delete(id: ObjectId, reason: &str) -> Result<bool, DbError> {
     Ok(outcome.matched_count > 0)
 }
 
+/// Erases an archived booking for good.
+///
+/// The filter carries `is_deleted` as well as the id, which is the whole safeguard:
+/// the only route to erasure runs through the archive, where the admin has already
+/// said why the booking was removed. A live booking cannot be erased by a stale form,
+/// by a mistyped id, or by a request that never went through the page -- and the
+/// check sits here rather than in a prior read, so there is no window between the two
+/// in which the booking could be restored.
+///
+/// Returns `false` when no archived booking carries that id, whether it is live,
+/// unknown, or already erased: all three mean the same thing to the caller, which is
+/// that nothing was erased.
+pub async fn hard_delete(id: ObjectId) -> Result<bool, DbError> {
+    let outcome = bookings()?.delete_one(archived(id)).await?;
+
+    Ok(outcome.deleted_count > 0)
+}
+
+/// Matches one booking, and only while it sits in the archive.
+///
+/// A function of its own so the safeguard can be asserted: it is one word away from
+/// matching every booking, and the test that would catch that cannot run the query.
+fn archived(id: ObjectId) -> bson::Document {
+    doc! { "_id": id, "is_deleted": true }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,6 +257,22 @@ mod tests {
         assert_eq!(
             booking.phone_key, "",
             "and carry no phone key until startup backfills one"
+        );
+    }
+
+    /// Erasure is the one operation nothing undoes, and the id alone would be
+    /// enough to reach a live booking. The archive is the only way in, and the
+    /// filter is what makes that true on the server rather than only in the page.
+    #[test]
+    fn nothing_but_an_archived_booking_can_be_erased() {
+        let id = ObjectId::new();
+        let filter = archived(id);
+
+        assert_eq!(filter.get_object_id("_id"), Ok(id), "the filter should name one booking");
+        assert_eq!(
+            filter.get_bool("is_deleted"),
+            Ok(true),
+            "and reach it only once archived: {filter:?}"
         );
     }
 

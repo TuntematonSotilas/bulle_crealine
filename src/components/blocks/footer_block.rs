@@ -17,8 +17,15 @@ pub fn FooterBlock() -> impl IntoView {
                         </div>
                     </div>
                 </FooterBrandLink>
+                // Ordered by who needs them: a visitor wanting to get in touch, then
+                // the two notices the law requires to be reachable from everywhere,
+                // then the way in for the one person who administers the site.
                 <FooterNavContainer>
+                    <FooterLink attr:href="/contact">Contact</FooterLink>
                     <FooterLink attr:href="/mentions-legales">Mentions légales</FooterLink>
+                    <FooterLink attr:href="/politique-de-confidentialite">
+                        "Politique de confidentialité"
+                    </FooterLink>
                     <FooterLink attr:href="/admin">Espace admin</FooterLink>
                 </FooterNavContainer>
                 <FooterNavContainer>
@@ -31,5 +38,54 @@ pub fn FooterBlock() -> impl IntoView {
                 </FooterNavContainer>
             </FooterContainer>
         </Footer>
+    }
+}
+#[cfg(all(test, feature = "ssr"))]
+mod tests {
+    use super::*;
+
+    fn footer_html() -> String {
+        use leptos_router::components::Router;
+        use leptos_router::location::RequestUrl;
+
+        Owner::new().with(|| {
+            // The links resolve `aria-current` against the location being rendered.
+            provide_context(RequestUrl::new("/"));
+
+            view! { <Router><FooterBlock/></Router> }.to_html()
+        })
+    }
+
+    /// The footer is on every page, which is why the legal notice lives here: it has
+    /// to be reachable from anywhere, and this is the only place that is.
+    #[test]
+    fn the_footer_leads_everywhere_it_has_to() {
+        let html = footer_html();
+
+        for path in ["/contact", "/mentions-legales", "/politique-de-confidentialite", "/admin"] {
+            assert!(
+                html.contains(&format!(r#"href="{path}""#)),
+                "{path} is unreachable from the footer: {html}"
+            );
+        }
+    }
+
+    /// Getting in touch comes before the notice, and the notice before the way in
+    /// for the one person who administers the site.
+    #[test]
+    fn the_links_are_ordered_by_who_needs_them() {
+        let html = footer_html();
+
+        let at = |path: &str| {
+            html.find(&format!(r#"href="{path}""#))
+                .unwrap_or_else(|| panic!("{path} is missing: {html}"))
+        };
+
+        assert!(at("/contact") < at("/mentions-legales"), "contact comes first: {html}");
+        assert!(
+            at("/mentions-legales") < at("/politique-de-confidentialite"),
+            "the notices stay in the order they were split: {html}"
+        );
+        assert!(at("/politique-de-confidentialite") < at("/admin"), "admin comes last: {html}");
     }
 }

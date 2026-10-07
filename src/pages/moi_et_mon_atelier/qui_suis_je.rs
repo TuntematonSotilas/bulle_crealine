@@ -1,11 +1,18 @@
 use leptos::prelude::*;
 
+use crate::components::seo::PageMeta;
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
 
 /// Renders the "About Me" page.
 #[component]
 pub fn QuiSuisJePage() -> impl IntoView {
     view! {
+        <PageMeta
+            title="Qui suis-je — Coraline Batault, Bulle Créaline"
+            description="Coraline Batault, animatrice d'ateliers créatifs à Feurs : mon parcours, ce qui m'anime et l'esprit dans lequel je reçois à l'atelier Bulle Créaline."
+            path="/moi-et-mon-atelier/qui-suis-je"
+        />
+
         <div class="mx-auto max-w-6xl space-y-12 py-6">
             <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_420px] items-start">
                 <div class="space-y-6">

@@ -1,6 +1,5 @@
 use leptos::either::Either;
 use leptos::prelude::*;
-use leptos_meta::Title;
 use leptos_router::hooks::{use_params_map, use_query_map};
 
 use crate::api::service_photos::service_photos;
@@ -9,6 +8,7 @@ use crate::api::sessions::upcoming_offer;
 use crate::components::blocks::service_block::ServiceBlock;
 use crate::components::blocks::service_gallery::ServiceGallery;
 use crate::components::blocks::upcoming_themes::{Showing, UpcomingThemes};
+use crate::components::seo::{PageMeta, clamp_description};
 use crate::models::group_by_theme;
 use crate::pages::not_found::NotFound;
 
@@ -27,7 +27,13 @@ pub fn ServicePage() -> impl IntoView {
     let params = use_params_map();
     let slug = move || params.read().get("slug").unwrap_or_default();
 
-    let services = Resource::new(|| (), |()| async move { all_services().await });
+    // Blocking, and not an ordinary resource: the page's title, description and
+    // canonical are built from the workshop's name, and `leptos_meta` only injects
+    // into the `<head>` what was rendered in the first chunk of the stream. An
+    // ordinary resource resolves after that chunk has gone out, and every workshop
+    // page shipped the site's generic title -- and, for a slug naming no workshop,
+    // a 200 rather than the 404 the branch below sets.
+    let services = Resource::new_blocking(|| (), |()| async move { all_services().await });
 
     // Created here, beside the one above, rather than inside the `Suspend` below:
     // a resource born while its parent suspense is already resolving misses the
@@ -66,10 +72,17 @@ pub fn ServicePage() -> impl IntoView {
                         None => Either::Left(view! { <NotFound/> }),
                         Some(service) => {
                             let title = format!("{} — Bulle Créaline (E.I)", service.label);
+                            let description = clamp_description(&service.description, 160);
+                            // `page_path()` rather than the URL that was asked for:
+                            // one workshop answers under both prefixes, and the
+                            // canonical has to name one of them. Arriving by
+                            // `/pro/<slug>` now points the crawler at the section
+                            // the workshop actually belongs to.
+                            let path = service.page_path();
 
                             Either::Right(
                                 view! {
-                                    <Title text=title/>
+                                    <PageMeta title=title description=description path=path/>
                                     <ServiceBlock service=service/>
                                 },
                             )

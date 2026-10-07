@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use icons::ArrowRight;
 use leptos::either::Either;
 use leptos::prelude::*;
-use leptos_meta::Title;
 
 use crate::api::catalogue::catalogue_photos;
+use crate::components::seo::PageMeta;
 use crate::api::services::all_services;
 use crate::components::ui::carousel::{
     Carousel, CarouselContent, CarouselIndicator, CarouselItem, CarouselNext, CarouselPrevious,
@@ -29,7 +29,11 @@ pub fn CataloguePage() -> impl IntoView {
     let photos = Resource::new(|| (), |()| async move { catalogue_photos().await });
 
     view! {
-        <Title text="Catalogue des ateliers — Bulle Créaline (E.I)"/>
+        <PageMeta
+            title="Catalogue des ateliers — Bulle Créaline (E.I)"
+            description="Tous les ateliers de Bulle Créaline à Feurs : parents-enfants, après-midis et apéros créatifs, accompagnements individuels et interventions en institution."
+            path="/moi-et-mon-atelier/catalogue"
+        />
 
         <div class="py-6 mx-auto space-y-10 max-w-6xl">
             <div class="space-y-4 text-center">

@@ -2,7 +2,7 @@ use leptos::either::Either;
 use leptos::prelude::*;
 use leptos_meta::Title;
 
-use crate::api::bookings::{DeleteBooking, SaveAdminComment, all_bookings};
+use crate::api::bookings::{DeleteBooking, PurgeBooking, SaveAdminComment, all_bookings};
 use crate::auth::user_message;
 use crate::components::ui::alert::{Alert, AlertDescription, AlertTitle, AlertVariant};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
@@ -16,20 +16,42 @@ use crate::pages::admin::AdminShell;
 pub fn AdminBookingsPage() -> impl IntoView {
     let save_comment = ServerAction::<SaveAdminComment>::new();
     let delete_booking = ServerAction::<DeleteBooking>::new();
+    let purge_booking = ServerAction::<PurgeBooking>::new();
 
-    // Reloads after either write, so the tables show what was stored rather than
-    // what was typed, and a deleted booking moves down on its own.
+    // Which archived booking is waiting on its confirmation, if any. Owned here
+    // rather than inside the table: the listing is rebuilt after every write, and a
+    // signal born down there would be a new one each time.
+    let confirming = RwSignal::new(None::<String>);
+
+    // Reloads after any write, so the tables show what was stored rather than what
+    // was typed: a deleted booking moves down on its own, an erased one disappears.
     let bookings = Resource::new(
-        move || (save_comment.version().get(), delete_booking.version().get()),
+        move || {
+            (
+                save_comment.version().get(),
+                delete_booking.version().get(),
+                purge_booking.version().get(),
+            )
+        },
         |_| async move { all_bookings().await },
     );
+
+    // An erasure that landed leaves its confirmation open over a row that no longer
+    // exists; one that failed keeps it open, which is where the message appears.
+    Effect::new(move |_| {
+        if purge_booking.value().get().is_some_and(|outcome| outcome.is_ok()) {
+            confirming.set(None);
+        }
+    });
 
     let write_error = move || {
         let comment_failure = save_comment.value().get().and_then(|outcome| outcome.err());
         let delete_failure = delete_booking.value().get().and_then(|outcome| outcome.err());
+        let purge_failure = purge_booking.value().get().and_then(|outcome| outcome.err());
 
         comment_failure
             .or(delete_failure)
+            .or(purge_failure)
             .map(|error| user_message(&error))
     };
 
@@ -72,7 +94,11 @@ pub fn AdminBookingsPage() -> impl IntoView {
                                             comment_action=save_comment
                                             delete_action=delete_booking
                                         />
-                                        <DeletedBookingTable rows=deleted/>
+                                        <DeletedBookingTable
+                                            rows=deleted
+                                            purge_action=purge_booking
+                                            confirming=confirming
+                                        />
                                     </div>
                                 },
                             )
@@ -204,10 +230,21 @@ fn BookingTable(
 
 /// The bookings the admin removed, with the reason given at the time.
 ///
-/// Read-only: these no longer count towards a session's capacity, and nothing
-/// here brings one back.
+/// These no longer count towards a session's capacity, and nothing here brings one
+/// back. What they can do is leave for good: archiving keeps a visitor's name, phone
+/// number and comment on file, and the page promises they do not stay forever.
+///
+/// `confirming` is a prop rather than state born here because the table is rebuilt on
+/// every write -- the listing reloads after each action -- and a signal owned inside
+/// would forget which row was being confirmed at the worst possible moment. It also
+/// lets a test render each of the two steps, which a signal owned inside would put
+/// out of reach.
 #[component]
-fn DeletedBookingTable(rows: Vec<BookingView>) -> impl IntoView {
+fn DeletedBookingTable(
+    rows: Vec<BookingView>,
+    purge_action: ServerAction<PurgeBooking>,
+    confirming: RwSignal<Option<String>>,
+) -> impl IntoView {
     if rows.is_empty() {
         return Either::Left(view! {
             <section class="space-y-3">
@@ -223,6 +260,8 @@ fn DeletedBookingTable(rows: Vec<BookingView>) -> impl IntoView {
     let body = rows
         .into_iter()
         .map(|booking| {
+            let id = booking.id.clone();
+
             view! {
                 <TableRow>
                     <SessionCell booking=booking.clone()/>
@@ -245,6 +284,10 @@ fn DeletedBookingTable(rows: Vec<BookingView>) -> impl IntoView {
                     <TableCell class="align-top whitespace-nowrap text-xs text-muted-foreground">
                         {booking.created_label.clone()}
                     </TableCell>
+
+                    <TableCell class="align-top">
+                        <PurgeCell id=id action=purge_action confirming=confirming/>
+                    </TableCell>
                 </TableRow>
             }
         })
@@ -263,18 +306,77 @@ fn DeletedBookingTable(rows: Vec<BookingView>) -> impl IntoView {
                             <TableHead>"Motif de suppression"</TableHead>
                             <TableHead>"Note interne"</TableHead>
                             <TableHead>"Reçue le"</TableHead>
+                            <TableHead>"Effacer"</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>{body}</TableBody>
                     <TableCaption>
                         {format!(
-                            "{count} réservation(s) supprimée(s) · {total_persons} personne(s), qui ne comptent plus dans les places prises",
+                            "{count} réservation(s) supprimée(s) · {total_persons} personne(s), qui ne comptent plus dans les places prises. Effacer retire définitivement les coordonnées du client.",
                         )}
                     </TableCaption>
                 </Table>
             </TableContainer>
         </section>
     })
+}
+
+/// Erasing one archived booking, in two steps.
+///
+/// Two steps rather than one, and no reason asked for: archiving already took a
+/// reason, and this is the step that cannot be taken back. A single destructive
+/// button next to five others is a mis-click away from a visitor's record ceasing to
+/// exist, with nothing left to say what it was.
+#[component]
+fn PurgeCell(
+    id: String,
+    action: ServerAction<PurgeBooking>,
+    confirming: RwSignal<Option<String>>,
+) -> impl IntoView {
+    // `Copy`, so the closure below stays `FnMut`: it runs again on every change to
+    // `confirming`, and a captured `String` would be moved out on the first run.
+    let id = StoredValue::new(id);
+
+    move || {
+        let asked = id.get_value();
+
+        if confirming.get().as_deref() == Some(asked.as_str()) {
+            Either::Left(view! {
+                <ActionForm action=action>
+                    <input type="hidden" name="id" value=asked/>
+                    <div class="flex flex-col gap-2">
+                        <p class="text-xs text-muted-foreground">
+                            "Définitif : le nom, le téléphone et le commentaire seront effacés."
+                        </p>
+                        <div class="flex gap-2">
+                            <Button variant=ButtonVariant::Destructive size=ButtonSize::Sm>
+                                "Oui, effacer"
+                            </Button>
+                            <Button
+                                variant=ButtonVariant::Ghost
+                                size=ButtonSize::Sm
+                                attr:r#type="button"
+                                on:click=move |_| confirming.set(None)
+                            >
+                                "Annuler"
+                            </Button>
+                        </div>
+                    </div>
+                </ActionForm>
+            })
+        } else {
+            Either::Right(view! {
+                <Button
+                    variant=ButtonVariant::Outline
+                    size=ButtonSize::Sm
+                    attr:r#type="button"
+                    on:click=move |_| confirming.set(Some(id.get_value()))
+                >
+                    "Effacer"
+                </Button>
+            })
+        }
+    }
 }
 
 /// Booked session, shared by both tables.
@@ -339,9 +441,12 @@ fn or_dash(text: &str) -> String {
 mod tests {
     use super::*;
 
+    const ID: &str = "651d1f0a0000000000000001";
+    const OTHER_ID: &str = "651d1f0a0000000000000003";
+
     fn booking() -> BookingView {
         BookingView {
-            id: "651d1f0a0000000000000001".to_owned(),
+            id: ID.to_owned(),
             session_id: "651d1f0a0000000000000002".to_owned(),
             service_label: "Apéros créatifs (adultes)".to_owned(),
             session_date_label: "samedi 12 avril à 14h".to_owned(),
@@ -373,8 +478,37 @@ mod tests {
         })
     }
 
+    /// The archive, with `confirming` set to whichever row is mid-confirmation --
+    /// `None` for the resting state.
+    fn render_deleted_confirming(rows: Vec<BookingView>, confirming: Option<&str>) -> String {
+        let confirming = confirming.map(str::to_owned);
+
+        Owner::new().with(move || {
+            let purge_action = ServerAction::<PurgeBooking>::new();
+            let confirming = RwSignal::new(confirming);
+
+            view! {
+                <DeletedBookingTable
+                    rows=rows
+                    purge_action=purge_action
+                    confirming=confirming
+                />
+            }
+            .to_html()
+        })
+    }
+
     fn render_deleted(rows: Vec<BookingView>) -> String {
-        Owner::new().with(|| view! { <DeletedBookingTable rows=rows/> }.to_html())
+        render_deleted_confirming(rows, None)
+    }
+
+    /// The same booking once the admin has removed it.
+    fn archived() -> BookingView {
+        BookingView {
+            is_deleted: true,
+            deletion_comment: "Annulation par téléphone".to_owned(),
+            ..booking()
+        }
     }
 
     /// The reason is the whole point of the deletion form, so it has to be posted
@@ -441,6 +575,63 @@ mod tests {
             html.contains("ne comptent plus dans les places prises"),
             "the caption should spell that out: {html}"
         );
+    }
+
+    /// An archived booking still holds a name, a phone number and a comment. The
+    /// archive is the only place they can be made to stop existing, so it has to
+    /// offer the way.
+    #[test]
+    fn an_archived_booking_can_be_erased_for_good() {
+        let html = render_deleted(vec![archived()]);
+
+        assert!(html.contains("Effacer"), "no way to erase: {html}");
+    }
+
+    /// One click should not erase a visitor's record. The first asks, the second
+    /// does it -- and only the second posts anything.
+    #[test]
+    fn erasing_takes_a_second_click() {
+        let resting = render_deleted(vec![archived()]);
+
+        assert!(
+            !resting.contains("Oui, effacer"),
+            "the confirmation should not be there before it is asked for: {resting}"
+        );
+        assert!(
+            !resting.contains("<form"),
+            "nor anything that posts: {resting}"
+        );
+
+        let asked = render_deleted_confirming(vec![archived()], Some(ID));
+
+        assert!(asked.contains("Oui, effacer"), "no confirmation: {asked}");
+        assert!(asked.contains("Annuler"), "no way back: {asked}");
+        assert!(asked.contains(ID), "the form posts no id: {asked}");
+    }
+
+    /// Confirming one row must not arm every other: the archive is a list, and two
+    /// rows away from the one that was clicked is exactly where a mis-click lands.
+    #[test]
+    fn only_the_row_being_confirmed_is_armed() {
+        let other = BookingView { id: OTHER_ID.to_owned(), ..archived() };
+
+        let html = render_deleted_confirming(vec![archived(), other], Some(ID));
+
+        assert_eq!(
+            html.matches("Oui, effacer").count(),
+            1,
+            "exactly one row should be armed: {html}"
+        );
+    }
+
+    /// Erasing cannot be taken back, and the row says so before it is confirmed
+    /// rather than after.
+    #[test]
+    fn the_confirmation_says_what_will_be_lost() {
+        let html = render_deleted_confirming(vec![archived()], Some(ID));
+
+        assert!(html.contains("Définitif"), "nothing says it is final: {html}");
+        assert!(html.contains("téléphone"), "nor what goes with it: {html}");
     }
 
     /// Both lists always render, so an empty one has to say so rather than vanish

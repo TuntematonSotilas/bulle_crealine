@@ -68,7 +68,7 @@ pub fn ServiceBlock(service: ServiceView) -> impl IntoView {
 
         view! {
             <div class="mb-6">
-                <h4 class="mb-4 text-lg font-bold text-heading">"Déroulement de l'atelier"</h4>
+                <h2 class="mb-4 text-lg font-bold text-heading">"Déroulement de l'atelier"</h2>
                 <div class="space-y-3">{items}</div>
             </div>
         }
@@ -109,9 +109,14 @@ pub fn ServiceBlock(service: ServiceView) -> impl IntoView {
                                 name=service.icon.clone()
                                 class="w-8 h-8 shrink-0 text-heading-soft"
                             />
-                            <h3 class="text-2xl font-bold lg:text-3xl text-heading">
+                            // The page's `h1`, not a card's heading: `ServicePage`
+                            // is this block's only caller, and the catalogue draws
+                            // its own tiles. Every size here comes from a class,
+                            // and Tailwind's preflight flattens the tags, so the
+                            // level is free to say what it means.
+                            <h1 class="text-2xl font-bold lg:text-3xl text-heading">
                                 {service.label.clone()}
-                            </h3>
+                            </h1>
                         </div>
                         <span class="block mb-3 w-10 h-1 rounded-full bg-heading-soft"></span>
                         <p class="text-base leading-relaxed text-muted-foreground">
@@ -164,6 +169,27 @@ mod tests {
         })
     }
 
+    /// The workshop's name is the page's own heading, not a card's inside a list.
+    /// `ServicePage` renders this block and nothing else does -- the catalogue draws
+    /// its own tiles -- so there is no second context to share the level with.
+    #[test]
+    fn the_workshop_name_is_the_page_heading() {
+        let html = block_html(service(false));
+
+        assert_eq!(html.matches("<h1").count(), 1, "not exactly one h1: {html}");
+        assert!(html.contains("Apéros créatifs (adultes)"), "{html}");
+    }
+
+    /// A run-through belongs one level under the name, not three. The page used to
+    /// open at `h3` and reach `h4` with nothing in between.
+    #[test]
+    fn the_run_through_sits_directly_under_the_page_heading() {
+        let html = block_html(service(false));
+
+        assert!(html.contains("<h2"), "the run-through should be an h2: {html}");
+        assert!(!html.contains("<h4"), "nothing here should reach h4: {html}");
+    }
+
     #[test]
     fn a_workshop_shows_its_name_description_age_and_run_through() {
         let html = block_html(service(false));
@@ -196,14 +222,14 @@ mod tests {
     /// wrong answer rather than a missing one.
     #[test]
     fn only_a_bookable_workshop_announces_the_studio() {
-        use crate::models::STUDIO_ADDRESS;
+        use crate::models::OWNER;
 
         assert!(
-            block_html(service(false)).contains(STUDIO_ADDRESS),
+            block_html(service(false)).contains(OWNER.address),
             "the address should show on a bookable workshop"
         );
         assert!(
-            !block_html(service(true)).contains(STUDIO_ADDRESS),
+            !block_html(service(true)).contains(OWNER.address),
             "a workshop for structures is not held there"
         );
     }

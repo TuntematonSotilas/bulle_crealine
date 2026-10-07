@@ -30,6 +30,10 @@ const UNSTAMPED_BUNDLE: &str = "no-cache";
 /// than the bundle and are harmless an hour out of date.
 const ASSETS: &str = "public, max-age=3600";
 
+/// What crawlers read. An hour is far shorter than any crawler's own interval, and
+/// both files are cheap enough to rebuild that holding them longer buys nothing.
+const CRAWLER: &str = "public, max-age=3600";
+
 /// Server-rendered pages. `no-cache` rather than `no-store`, so that the back
 /// button's instant restore goes on working.
 const DOCUMENT: &str = "no-cache";
@@ -87,6 +91,8 @@ fn policy_for(path: &str, stamped: bool) -> Option<&'static str> {
         }
     } else if path.starts_with("/assets/") || path == "/favicon.ico" {
         Some(ASSETS)
+    } else if path == "/robots.txt" || path == "/sitemap.xml" {
+        Some(CRAWLER)
     } else if path.starts_with("/media/") || path.starts_with("/api/") {
         // A photo states its own `immutable`, and a server function's answer is
         // never cached to begin with.
@@ -133,6 +139,14 @@ mod tests {
     fn assets_may_go_stale_for_an_hour() {
         assert_eq!(policy_for("/assets/icon.svg", true), Some(ASSETS));
         assert_eq!(policy_for("/favicon.ico", true), Some(ASSETS));
+    }
+
+    /// Neither is a page, and letting them fall through to `DOCUMENT` would have
+    /// every crawler revalidate a file that changes when a workshop is added.
+    #[test]
+    fn what_crawlers_read_may_be_kept_for_an_hour() {
+        assert_eq!(policy_for("/robots.txt", true), Some(CRAWLER));
+        assert_eq!(policy_for("/sitemap.xml", true), Some(CRAWLER));
     }
 
     #[test]
