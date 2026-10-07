@@ -245,3 +245,35 @@ pub async fn delete_booking(id: String, reason: String) -> Result<(), ServerFnEr
 
     Ok(())
 }
+
+/// Erases an archived booking for good.
+///
+/// Only reaches a booking already in the archive -- the filter in
+/// [`crate::db::booking::hard_delete`] carries that condition, so the two-step the
+/// admin area shows is also enforced on the server. Nothing restores what this
+/// removes: the point is that a visitor's name, phone number and comment stop
+/// existing.
+#[server]
+pub async fn purge_booking(id: String) -> Result<(), ServerFnError> {
+    use crate::api::log_failure;
+    use crate::auth::require_admin;
+    use crate::db::{booking, session};
+
+    require_admin()?;
+
+    let booking_id =
+        session::parse_id(&id).map_err(|_| ServerFnError::new("Réservation inconnue."))?;
+
+    let erased = booking::hard_delete(booking_id)
+        .await
+        .map_err(|error| log_failure("erasing an archived booking", error))?;
+
+    if !erased {
+        // A live booking lands here too, and is told the same thing: the archive is
+        // the only way in, and saying "this one is not archived" would describe the
+        // safeguard to whoever got past the page.
+        return Err(ServerFnError::new("Réservation introuvable dans les archives."));
+    }
+
+    Ok(())
+}
