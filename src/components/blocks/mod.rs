@@ -5,6 +5,7 @@ pub mod service_gallery;
 pub mod session_card;
 pub mod session_list;
 pub mod studio_place;
+pub mod theme_gallery;
 pub mod upcoming_themes;
 
 pub use nav_menu::NavMenu;

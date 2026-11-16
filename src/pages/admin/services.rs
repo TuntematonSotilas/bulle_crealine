@@ -46,6 +46,10 @@ use crate::pages::admin::AdminShell;
 /// `Send` nor `Sync`, since it only ever exists in the browser.
 type AddPhotoAction = Action<FormData, Result<(), ServerFnError>>;
 
+/// How many columns the listing has, so a panel slipped between two rows can span
+/// the width of it. Pinned against the header by a test.
+const COLUMNS: &str = "5";
+
 /// What the admin is doing to the workshop list right now.
 #[derive(Clone, Debug, PartialEq)]
 enum Editing {
@@ -94,45 +98,22 @@ pub fn AdminServicesPage() -> impl IntoView {
             .and_then(|outcome| outcome.err())
             .map(|error| user_message(&error))
     };
-    let delete_error = move || {
-        delete
-            .value()
-            .get()
-            .and_then(|outcome| outcome.err())
-            .map(|error| user_message(&error))
-    };
 
     view! {
         <Title text="Services — Administration"/>
 
         <AdminShell title="Services" current="/admin/services">
 
-            {move || {
-                delete_error()
-                    .map(|message| {
-                        view! { <Alert variant=AlertVariant::Destructive>{message}</Alert> }
-                    })
-            }}
-
+            // A deletion is not one of these branches: its confirmation opens inside
+            // the table, under the row it concerns, as on the themes page.
             {move || match editing.get() {
-                Editing::None => {
-                    EitherOf3::A(
-                        view! {
-                            <div>
-                                <Button on:click=move |_| editing.set(Editing::New)>
-                                    "Nouveau service"
-                                </Button>
-                            </div>
-                        },
-                    )
-                }
                 Editing::New | Editing::Service(_) => {
                     let service = match editing.get() {
                         Editing::Service(service) => Some(service),
                         _ => None,
                     };
 
-                    EitherOf3::B(
+                    Either::Left(
                         view! {
                             <ServiceForm
                                 action=save
@@ -143,10 +124,14 @@ pub fn AdminServicesPage() -> impl IntoView {
                         },
                     )
                 }
-                Editing::Deleting(service) => {
-                    EitherOf3::C(
+                Editing::None | Editing::Deleting(_) => {
+                    Either::Right(
                         view! {
-                            <DeleteConfirmation action=delete service=service on_cancel=cancel/>
+                            <div>
+                                <Button on:click=move |_| editing.set(Editing::New)>
+                                    "Nouveau service"
+                                </Button>
+                            </div>
                         },
                     )
                 }
@@ -167,7 +152,9 @@ pub fn AdminServicesPage() -> impl IntoView {
                             )
                         }
                         Ok(rows) => {
-                            Either::Right(view! { <ServiceTable rows=rows editing=editing/> })
+                            Either::Right(
+                                view! { <ServiceTable rows=rows editing=editing delete=delete/> },
+                            )
                         }
                     }
                 })}
@@ -179,7 +166,12 @@ pub fn AdminServicesPage() -> impl IntoView {
 
 /// The listing itself.
 #[component]
-fn ServiceTable(rows: Vec<ServiceView>, editing: RwSignal<Editing>) -> impl IntoView {
+fn ServiceTable(
+    rows: Vec<ServiceView>,
+    editing: RwSignal<Editing>,
+    /// Carried down to the confirmation, which opens between two rows.
+    delete: ServerAction<DeleteService>,
+) -> impl IntoView {
     if rows.is_empty() {
         return Either::Left(view! {
             <Alert>
@@ -191,48 +183,12 @@ fn ServiceTable(rows: Vec<ServiceView>, editing: RwSignal<Editing>) -> impl Into
         });
     }
 
+    let cancel = move || editing.set(Editing::None);
+
     let body = rows
         .into_iter()
         .map(|service| {
-            let for_edit = service.clone();
-            let for_delete = service.clone();
-
-            // Read out of `service` before the closures below capture it.
-            let icon = service.icon.clone();
-            let label = service.label.clone();
-            let slug = service.slug.clone();
-            let section = section_title(service.pro);
-
-            view! {
-                <TableRow>
-                    <TableCell>
-                        <ServiceIcon name=icon class="w-5 h-5 text-heading-soft"/>
-                    </TableCell>
-                    <TableCell class="font-medium">{label}</TableCell>
-                    <TableCell class="text-muted-foreground">{slug}</TableCell>
-                    <TableCell class="whitespace-nowrap">{section}</TableCell>
-                    <TableCell>
-                        <div class="flex gap-2 justify-end">
-                            <Button
-                                variant=ButtonVariant::Outline
-                                size=ButtonSize::Sm
-                                on:click=move |_| editing.set(Editing::Service(for_edit.clone()))
-                            >
-                                "Modifier"
-                            </Button>
-                            <Button
-                                variant=ButtonVariant::Destructive
-                                size=ButtonSize::Sm
-                                on:click=move |_| {
-                                    editing.set(Editing::Deleting(for_delete.clone()))
-                                }
-                            >
-                                "Supprimer"
-                            </Button>
-                        </div>
-                    </TableCell>
-                </TableRow>
-            }
+            view! { <ServiceRows service=service editing=editing delete=delete on_cancel=cancel/> }
         })
         .collect::<Vec<_>>();
 
@@ -252,6 +208,85 @@ fn ServiceTable(rows: Vec<ServiceView>, editing: RwSignal<Editing>) -> impl Into
             </Table>
         </TableContainer>
     })
+}
+
+/// One workshop's row, and the deletion panel beneath it when it is the one going.
+#[component]
+fn ServiceRows(
+    service: ServiceView,
+    editing: RwSignal<Editing>,
+    delete: ServerAction<DeleteService>,
+    on_cancel: impl Fn() + 'static + Send + Sync + Copy,
+) -> impl IntoView {
+    let id = service.id.clone();
+    // Held because the closure below re-runs on every change to `editing` and needs
+    // its own copy each time.
+    let dropping = StoredValue::new(service.clone());
+
+    view! {
+        <ServiceRow service=service editing=editing/>
+
+        {move || {
+            let id = id.clone();
+
+            matches!(editing.get(), Editing::Deleting(ref chosen) if chosen.id == id)
+                .then(|| {
+                    view! {
+                        <TableRow>
+                            <TableCell attr:colspan=COLUMNS>
+                                <DeleteConfirmation
+                                    action=delete
+                                    service=dropping.get_value()
+                                    on_cancel=on_cancel
+                                />
+                            </TableCell>
+                        </TableRow>
+                    }
+                })
+        }}
+    }
+}
+
+/// One workshop in the listing.
+#[component]
+fn ServiceRow(service: ServiceView, editing: RwSignal<Editing>) -> impl IntoView {
+    let for_edit = service.clone();
+    let for_delete = service.clone();
+
+    // Read out of `service` before the closures below capture it.
+    let icon = service.icon.clone();
+    let label = service.label.clone();
+    let slug = service.slug.clone();
+    let section = section_title(service.pro);
+
+    view! {
+        <TableRow>
+            <TableCell>
+                <ServiceIcon name=icon class="w-5 h-5 text-heading-soft"/>
+            </TableCell>
+            <TableCell class="font-medium">{label}</TableCell>
+            <TableCell class="text-muted-foreground">{slug}</TableCell>
+            <TableCell class="whitespace-nowrap">{section}</TableCell>
+            <TableCell>
+                <div class="flex gap-2 justify-end">
+                    <Button
+                        variant=ButtonVariant::Outline
+                        size=ButtonSize::Sm
+                        on:click=move |_| editing.set(Editing::Service(for_edit.clone()))
+                    >
+                        "Modifier"
+                    </Button>
+                    <Button
+                        variant=ButtonVariant::Destructive
+                        size=ButtonSize::Sm
+                        on:click=move |_| editing.set(Editing::Deleting(for_delete.clone()))
+                    >
+                        "Supprimer"
+                    </Button>
+                </div>
+            </TableCell>
+        </TableRow>
+    }
 }
 
 /// Create or edit form. `service` being `None` means a creation.
@@ -752,25 +787,37 @@ fn DeleteConfirmation(
         |id| async move { service_session_count(id).await },
     );
 
+    // Reported here rather than at the top of the page, where the admin is no
+    // longer looking: a refusal belongs beside the button that drew it.
+    let failure = move || {
+        action
+            .value()
+            .get()
+            .and_then(|outcome| outcome.err())
+            .map(|error| user_message(&error))
+    };
+
+    // Neither scrolled to nor focused: this panel opens in the row right under the
+    // button that asked for it, already in view.
     view! {
-        <Card>
-            <CardHeader>
-                <CardTitle>"Supprimer ce service ?"</CardTitle>
-                <CardDescription>{service.label.clone()}</CardDescription>
-            </CardHeader>
+        <div class="p-4 rounded-md border border-border bg-surface">
+            // Outside the `<Transition>` below on purpose: what it wraps never
+            // resolves under a synchronous `to_html`, so a title placed inside would
+            // leave the panel with nothing a test could see.
+            <p class="font-medium">
+                {format!("Supprimer « {} » ?", service.label)}
+            </p>
 
             {photographed
                 .then(|| {
                     view! {
-                        <CardContent>
-                            <Alert variant=AlertVariant::Destructive>
-                                "Ses photos seront supprimées avec lui."
-                            </Alert>
-                        </CardContent>
+                        <Alert variant=AlertVariant::Destructive class="mt-3">
+                            "Ses photos seront supprimées avec lui."
+                        </Alert>
                     }
                 })}
 
-            <CardContent>
+            <div class="mt-3">
                 <Transition fallback=|| ()>
                     {move || {
                         let id = id.clone();
@@ -820,8 +867,19 @@ fn DeleteConfirmation(
                         })
                     }}
                 </Transition>
-            </CardContent>
-        </Card>
+            </div>
+
+            {move || {
+                failure()
+                    .map(|message| {
+                        view! {
+                            <Alert variant=AlertVariant::Destructive class="mt-3">
+                                {message}
+                            </Alert>
+                        }
+                    })
+            }}
+        </div>
     }
 }
 
@@ -1053,12 +1111,46 @@ mod tests {
         );
     }
 
+    fn table_html(rows: Vec<ServiceView>) -> String {
+        table_html_while(rows, Editing::None)
+    }
+
+    /// The table as it renders while the admin is in the middle of something, which
+    /// is what puts a deletion panel between two rows.
+    fn table_html_while(rows: Vec<ServiceView>, editing: Editing) -> String {
+        // A deletion panel owns a `Resource`, and nothing else in this table does.
+        crate::pages::admin::init_test_executor();
+
+        Owner::new().with(|| {
+            let editing = RwSignal::new(editing);
+            let delete = ServerAction::<DeleteService>::new();
+            view! { <ServiceTable rows=rows editing=editing delete=delete/> }.to_html()
+        })
+    }
+
+    /// A second workshop, to tell which row a panel opened under.
+    fn other() -> ServiceView {
+        ServiceView {
+            id: "651d1f0a0000000000000002".to_owned(),
+            slug: "ateliers-parents-enfants".to_owned(),
+            label: "Ateliers parents-enfants".to_owned(),
+            ..service()
+        }
+    }
+
+    /// What only the deletion panel says.
+    const CONFIRMATION: &str = "Supprimer «";
+
+    /// Where in the string `needle` sits, so the order of two things in the rendered
+    /// markup can be asserted.
+    fn at(html: &str, needle: &str) -> usize {
+        html.find(needle)
+            .unwrap_or_else(|| panic!("{needle} is missing: {html}"))
+    }
+
     #[test]
     fn the_table_lists_a_workshop_with_its_slug_and_section() {
-        let html = Owner::new().with(|| {
-            let editing = RwSignal::new(Editing::None);
-            view! { <ServiceTable rows=vec![service()] editing=editing/> }.to_html()
-        });
+        let html = table_html(vec![service()]);
 
         assert!(html.contains("Apéros créatifs (adultes)"), "no name: {html}");
         assert!(html.contains("aperos-creatifs"), "no slug: {html}");
@@ -1070,12 +1162,42 @@ mod tests {
     /// it must read as something to fix rather than as a blank table.
     #[test]
     fn the_table_says_so_when_there_is_nothing_yet() {
-        let html = Owner::new().with(|| {
-            let editing = RwSignal::new(Editing::None);
-            view! { <ServiceTable rows=vec![] editing=editing/> }.to_html()
-        });
+        let html = table_html(vec![]);
 
         assert!(html.contains("Aucun service"), "{html}");
+    }
+
+    #[test]
+    fn the_confirmation_opens_under_the_row_it_concerns() {
+        let html = table_html_while(vec![service(), other()], Editing::Deleting(service()));
+
+        assert_eq!(html.matches(CONFIRMATION).count(), 1, "not exactly one: {html}");
+        assert!(
+            at(&html, "aperos-creatifs") < at(&html, CONFIRMATION),
+            "the panel should follow its row: {html}"
+        );
+        assert!(
+            at(&html, CONFIRMATION) < at(&html, "ateliers-parents-enfants"),
+            "and come before the next one: {html}"
+        );
+    }
+
+    #[test]
+    fn a_table_nobody_is_deleting_from_carries_none() {
+        let html = table_html(vec![service(), other()]);
+
+        assert!(!html.contains(CONFIRMATION), "nothing should be asked: {html}");
+    }
+
+    /// A column added to the header without touching `COLUMNS` would box the panel
+    /// into part of the width, which nothing else would catch.
+    #[test]
+    fn the_confirmation_spans_every_column() {
+        let html = table_html_while(vec![service()], Editing::Deleting(service()));
+
+        let columns = html.matches(r#"data-name="TableHead""#).count();
+        assert_eq!(COLUMNS, columns.to_string(), "the panel spans {COLUMNS} of {columns}: {html}");
+        assert!(html.contains(&format!(r#"colspan="{COLUMNS}""#)), "{html}");
     }
 
     /// The warning is what tells the admin an edit is not harmless.

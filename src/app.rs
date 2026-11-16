@@ -60,6 +60,7 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/admin/sessions") view=AdminSessionsPage/>
                     <Route path=path!("/admin/themes") view=AdminThemesPage/>
                     <Route path=path!("/admin/bookings") view=AdminBookingsPage/>
+                    <Route path=path!("/admin/qrcode") view=AdminQrCodePage/>
                     <Route path=WildcardSegment("any") view=NotFound/>
                 </Routes>
             </main>

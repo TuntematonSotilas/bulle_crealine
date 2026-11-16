@@ -7,9 +7,7 @@ use leptos::prelude::*;
 use crate::api::catalogue::catalogue_photos;
 use crate::components::seo::PageMeta;
 use crate::api::services::all_services;
-use crate::components::ui::carousel::{
-    Carousel, CarouselContent, CarouselIndicator, CarouselItem, CarouselNext, CarouselPrevious,
-};
+use crate::components::blocks::theme_gallery::ThemeGallery;
 use crate::components::ui::service_icon::ServiceIcon;
 use crate::models::{PhotoView, ServicePictures, ServiceView, section_title};
 
@@ -107,7 +105,7 @@ fn Sections(services: Vec<ServiceView>, photos: Vec<ServicePictures>) -> impl In
                         </h2>
                         // Stacked rather than laid out in a grid, as it was while a
                         // workshop was a name and two lines: each rubric now carries
-                        // a carousel, which wants the width.
+                        // a grid of its pictures, which wants the width.
                         <div class="space-y-8">{rubrics}</div>
                     </section>
                 }
@@ -161,51 +159,14 @@ fn Workshop(service: ServiceView, photos: Vec<PhotoView>) -> impl IntoView {
     }
 }
 
-/// What a workshop looks like, one image at a time.
+/// What a workshop looks like: the shared grid of its themes, or of its photos.
 ///
 /// Draws nothing at all when there is nothing to show. A bookable workshop with no
 /// theme yet, and one run for structures with no photo yet, are both ordinary
 /// starting states rather than gaps worth a frame around them.
 #[component]
 fn Gallery(photos: Vec<PhotoView>) -> impl IntoView {
-    if photos.is_empty() {
-        return None;
-    }
-
-    Some(view! {
-        // The arrows are positioned at -3rem, outside the carousel's own box: this
-        // padding is what keeps them on the page rather than off its left edge.
-        <div class="px-12">
-            <Carousel looping=true>
-                <CarouselContent>
-                    // Built here rather than collected into a `Vec` above and
-                    // dropped in: every piece of a carousel reads the id off a
-                    // context the `Carousel` provides, so a slide built before it
-                    // exists finds nothing and brings the render down.
-                    {photos
-                        .into_iter()
-                        .map(|photo| {
-                            view! {
-                                <CarouselItem>
-                                    <div class="overflow-hidden rounded-[1.5rem] border border-border aspect-16/9">
-                                        <img
-                                            src=photo.url
-                                            alt=photo.alt
-                                            loading="lazy"
-                                            class="object-cover w-full h-full"
-                                        />
-                                    </div>
-                                </CarouselItem>
-                            }
-                        })
-                        .collect::<Vec<_>>()}
-                </CarouselContent>
-                <CarouselPrevious/>
-                <CarouselNext/>
-                <CarouselIndicator/>
-            </Carousel>
-        </div>
-    })
+    (!photos.is_empty()).then(|| view! { <ThemeGallery photos=photos/> })
 }
 
 #[cfg(all(test, feature = "ssr"))]
@@ -246,6 +207,7 @@ mod tests {
                 .map(|rank| PhotoView {
                     url: format!("/media/{slug}/{rank}"),
                     alt: format!("Image {rank} de {slug}"),
+                    theme: format!("Thème {rank} de {slug}"),
                 })
                 .collect(),
         }
@@ -347,20 +309,56 @@ mod tests {
         assert!(html.contains("/media/en-institution/3"), "the last is missing: {html}");
     }
 
-    /// Two carousels for two workshops with pictures, and none for the third:
-    /// without this a single carousel holding everything would pass the count above.
+    /// Workshop, then theme, then pictures: each theme gets a rubric of its own,
+    /// headed by its name, holding its pictures.
     #[test]
-    fn a_workshop_with_pictures_gets_a_carousel_of_its_own() {
-        let html = sections_html(
-            services(),
-            vec![pictures("aperos-creatifs", 2), pictures("en-institution", 3)],
-        );
+    fn each_theme_gets_a_rubric_of_its_own() {
+        let html = sections_html(services(), vec![pictures("aperos-creatifs", 2)]);
 
-        assert_eq!(
-            html.matches(r#"data-name="Carousel""#).count(),
-            2,
-            "not one carousel per workshop with pictures: {html}"
+        assert_eq!(html.matches("<h4").count(), 2, "not one heading per theme: {html}");
+        assert_eq!(html.matches("<li").count(), 2, "not one cell per theme: {html}");
+        assert_eq!(html.matches("<ul").count(), 1, "the themes should share one grid: {html}");
+
+        let first = html.find("Thème 1 de aperos-creatifs").expect("the first theme is named");
+        let first_picture = html.find("/media/aperos-creatifs/1").expect("its picture shows");
+        let second = html.find("Thème 2 de aperos-creatifs").expect("the second theme is named");
+        assert!(
+            first < first_picture && first_picture < second,
+            "a picture is outside its rubric: {first}, {first_picture}, {second}"
         );
+    }
+
+    /// Several pictures of one theme share its rubric rather than each opening one.
+    #[test]
+    fn pictures_of_the_same_theme_share_one_rubric() {
+        let mut shared = pictures("aperos-creatifs", 3);
+        for photo in &mut shared.photos {
+            photo.theme = "Aquarelle".to_owned();
+        }
+
+        let html = sections_html(services(), vec![shared]);
+
+        assert_eq!(html.matches("<h4").count(), 1, "the theme was split: {html}");
+        assert_eq!(html.matches("<li").count(), 1, "not one cell for the theme: {html}");
+        assert_eq!(html.matches("<img").count(), 3, "a picture went missing: {html}");
+    }
+
+    /// A workshop's own photos belong to no theme: a cell each in one grid, and no
+    /// heading standing over them with nothing to say.
+    #[test]
+    fn photos_without_a_theme_come_as_one_untitled_grid() {
+        let mut untitled = pictures("en-institution", 2);
+        for photo in &mut untitled.photos {
+            photo.theme.clear();
+        }
+
+        let html = sections_html(services(), vec![untitled]);
+
+        assert_eq!(html.matches("<ul").count(), 1, "not one grid: {html}");
+        assert_eq!(html.matches("<li").count(), 2, "not a cell per photo: {html}");
+        assert_eq!(html.matches("<img").count(), 2, "{html}");
+        assert!(!html.contains("<h4"), "an empty heading was drawn: {html}");
+        assert!(!html.contains(r#"data-name="Carousel""#), "no carousel any more: {html}");
     }
 
     /// The pictures of one workshop must not drift into the rubric below it, which
@@ -382,16 +380,15 @@ mod tests {
     /// A workshop with no theme and no photo yet is the ordinary starting state, not
     /// a gap worth an empty frame.
     #[test]
-    fn a_workshop_with_no_picture_draws_no_carousel() {
+    fn a_workshop_with_no_picture_draws_no_list() {
         let html = sections_html(services(), Vec::new());
 
-        assert!(!html.contains(r#"data-name="Carousel""#), "no carousel at all: {html}");
+        assert!(!html.contains("<ul"), "no grid at all: {html}");
         assert!(!html.contains("<img"), "and certainly no image: {html}");
         assert!(html.contains("Apéros créatifs"), "the rubrics still show: {html}");
     }
 
-    /// Every picture says what it is, the carousel being the whole of what is new
-    /// here -- and a page of `alt=""` says nothing at all to anyone reading it with
+    /// Every picture says what it is -- and a page of `alt=""` says nothing at all to anyone reading it with
     /// their ears.
     #[test]
     fn every_picture_carries_its_own_wording() {

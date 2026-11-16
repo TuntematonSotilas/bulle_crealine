@@ -158,6 +158,7 @@ mod tests {
                 .map(|rank| PhotoView {
                     url: format!("/media/theme/{slug}-{rank}"),
                     alt: format!("Thème : {slug} {rank}"),
+                    theme: String::new(),
                 })
                 .collect(),
         }
