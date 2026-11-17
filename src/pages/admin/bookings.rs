@@ -10,6 +10,7 @@ use crate::components::ui::table::*;
 use crate::components::ui::textarea::Textarea;
 use crate::models::BookingView;
 use crate::pages::admin::AdminShell;
+use crate::pages::admin::row_key;
 
 /// Booking listing, at `/admin/bookings`.
 #[component]
@@ -135,72 +136,75 @@ fn BookingTable(
     let total_persons: u32 = rows.iter().map(|booking| booking.persons).sum();
     let count = rows.len();
 
-    let body = rows
-        .into_iter()
-        .map(|booking| {
-            // One per form: each `ActionForm` closes over the id it posts, so a
-            // single clone would be moved into the first of the two.
-            let comment_id = booking.id.clone();
-            let delete_id = booking.id.clone();
+    // Keyed on the row's whole content, never diffed by position: see
+    // [`crate::pages::admin::row_key`].
+    let rows = StoredValue::new(rows);
+    let row = move |booking: BookingView| {
+        // One per form: each `ActionForm` closes over the id it posts, so a
+        // single clone would be moved into the first of the two.
+        let comment_id = booking.id.clone();
+        let delete_id = booking.id.clone();
 
-            view! {
-                <TableRow>
-                    <SessionCell booking=booking.clone()/>
-                    <ClientCell booking=booking.clone()/>
+        view! {
+            <TableRow>
+                <SessionCell booking=booking.clone()/>
+                <ClientCell booking=booking.clone()/>
 
-                    <TableCell class="align-top text-center">{booking.persons}</TableCell>
+                <TableCell class="align-top text-center">{booking.persons}</TableCell>
 
-                    <TableCell class="align-top max-w-48">
-                        <p class="text-xs whitespace-pre-wrap text-muted-foreground">
-                            {or_dash(&booking.comment)}
-                        </p>
-                    </TableCell>
+                <TableCell class="align-top max-w-48">
+                    <p class="text-xs whitespace-pre-wrap text-muted-foreground">
+                        {or_dash(&booking.comment)}
+                    </p>
+                </TableCell>
 
-                    <TableCell class="align-top whitespace-nowrap text-xs text-muted-foreground">
-                        {booking.created_label.clone()}
-                    </TableCell>
+                <TableCell class="align-top whitespace-nowrap text-xs text-muted-foreground">
+                    {booking.created_label.clone()}
+                </TableCell>
 
-                    <TableCell class="align-top">
-                        <ActionForm action=comment_action>
-                            <input type="hidden" name="id" value=comment_id/>
-                            <div class="flex flex-col gap-2 min-w-56">
-                                <Textarea
-                                    name="comment"
-                                    rows=2
-                                    maxlength=2000
-                                    placeholder="Note interne…"
-                                    value=booking.admin_comment.clone()
-                                    class="text-xs"
-                                />
-                                <Button variant=ButtonVariant::Outline size=ButtonSize::Sm>
-                                    "Enregistrer"
-                                </Button>
-                            </div>
-                        </ActionForm>
-                    </TableCell>
+                <TableCell class="align-top">
+                    <ActionForm action=comment_action>
+                        <input type="hidden" name="id" value=comment_id/>
+                        <div class="flex flex-col gap-2 min-w-56">
+                            <Textarea
+                                name="comment"
+                                rows=2
+                                maxlength=2000
+                                placeholder="Note interne…"
+                                value=booking.admin_comment.clone()
+                                class="text-xs"
+                            />
+                            <Button variant=ButtonVariant::Outline size=ButtonSize::Sm>
+                                "Enregistrer"
+                            </Button>
+                        </div>
+                    </ActionForm>
+                </TableCell>
 
-                    <TableCell class="align-top">
-                        <ActionForm action=delete_action>
-                            <input type="hidden" name="id" value=delete_id/>
-                            <div class="flex flex-col gap-2 min-w-56">
-                                <Textarea
-                                    name="reason"
-                                    rows=2
-                                    maxlength=2000
-                                    required=true
-                                    placeholder="Motif de suppression (obligatoire)…"
-                                    class="text-xs"
-                                />
-                                <Button variant=ButtonVariant::Destructive size=ButtonSize::Sm>
-                                    "Supprimer"
-                                </Button>
-                            </div>
-                        </ActionForm>
-                    </TableCell>
-                </TableRow>
-            }
-        })
-        .collect::<Vec<_>>();
+                <TableCell class="align-top">
+                    <ActionForm action=delete_action>
+                        <input type="hidden" name="id" value=delete_id/>
+                        <div class="flex flex-col gap-2 min-w-56">
+                            <Textarea
+                                name="reason"
+                                rows=2
+                                maxlength=2000
+                                required=true
+                                placeholder="Motif de suppression (obligatoire)…"
+                                class="text-xs"
+                            />
+                            <Button variant=ButtonVariant::Destructive size=ButtonSize::Sm>
+                                "Supprimer"
+                            </Button>
+                        </div>
+                    </ActionForm>
+                </TableCell>
+            </TableRow>
+        }
+    };
+    let body = view! {
+        <For each=move || rows.get_value() key=row_key children=row/>
+    };
 
     Either::Right(view! {
         <section class="space-y-3">
@@ -257,41 +261,44 @@ fn DeletedBookingTable(
     let total_persons: u32 = rows.iter().map(|booking| booking.persons).sum();
     let count = rows.len();
 
-    let body = rows
-        .into_iter()
-        .map(|booking| {
-            let id = booking.id.clone();
+    // Keyed on the row's whole content, never diffed by position: see
+    // [`crate::pages::admin::row_key`].
+    let rows = StoredValue::new(rows);
+    let row = move |booking: BookingView| {
+        let id = booking.id.clone();
 
-            view! {
-                <TableRow>
-                    <SessionCell booking=booking.clone()/>
-                    <ClientCell booking=booking.clone()/>
+        view! {
+            <TableRow>
+                <SessionCell booking=booking.clone()/>
+                <ClientCell booking=booking.clone()/>
 
-                    <TableCell class="align-top text-center">{booking.persons}</TableCell>
+                <TableCell class="align-top text-center">{booking.persons}</TableCell>
 
-                    <TableCell class="align-top max-w-64">
-                        <p class="text-xs whitespace-pre-wrap">
-                            {or_dash(&booking.deletion_comment)}
-                        </p>
-                    </TableCell>
+                <TableCell class="align-top max-w-64">
+                    <p class="text-xs whitespace-pre-wrap">
+                        {or_dash(&booking.deletion_comment)}
+                    </p>
+                </TableCell>
 
-                    <TableCell class="align-top max-w-48">
-                        <p class="text-xs whitespace-pre-wrap text-muted-foreground">
-                            {or_dash(&booking.admin_comment)}
-                        </p>
-                    </TableCell>
+                <TableCell class="align-top max-w-48">
+                    <p class="text-xs whitespace-pre-wrap text-muted-foreground">
+                        {or_dash(&booking.admin_comment)}
+                    </p>
+                </TableCell>
 
-                    <TableCell class="align-top whitespace-nowrap text-xs text-muted-foreground">
-                        {booking.created_label.clone()}
-                    </TableCell>
+                <TableCell class="align-top whitespace-nowrap text-xs text-muted-foreground">
+                    {booking.created_label.clone()}
+                </TableCell>
 
-                    <TableCell class="align-top">
-                        <PurgeCell id=id action=purge_action confirming=confirming/>
-                    </TableCell>
-                </TableRow>
-            }
-        })
-        .collect::<Vec<_>>();
+                <TableCell class="align-top">
+                    <PurgeCell id=id action=purge_action confirming=confirming/>
+                </TableCell>
+            </TableRow>
+        }
+    };
+    let body = view! {
+        <For each=move || rows.get_value() key=row_key children=row/>
+    };
 
     Either::Right(view! {
         <section class="space-y-3">

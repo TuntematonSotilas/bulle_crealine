@@ -27,6 +27,7 @@ use crate::components::ui::select::{
 use crate::components::ui::table::*;
 use crate::models::{MAX_PHOTO_LABEL, ThemeView};
 use crate::pages::admin::AdminShell;
+use crate::pages::admin::row_key;
 
 /// The action posting the theme form, which carries a file.
 ///
@@ -327,14 +328,17 @@ fn ThemeTable(
     let cancel = move || editing.set(Editing::None);
 
     // Reads the filter, never `editing`: a click on "Supprimer" would otherwise
-    // redraw every row of the table to open one panel.
-    let body = move || {
-        rows.with_value(|rows| matching(rows, &filter.get()))
-            .into_iter()
-            .map(|theme| {
+    // redraw every row of the table to open one panel. Keyed rather than a `Vec`:
+    // filtering shifts the rows, and see [`crate::pages::admin::row_key`] for what a
+    // positional diff did to their buttons.
+    let body = view! {
+        <For
+            each=move || rows.with_value(|rows| matching(rows, &filter.get()))
+            key=row_key
+            children=move |theme| {
                 view! { <ThemeRows theme=theme editing=editing delete=delete on_cancel=cancel/> }
-            })
-            .collect::<Vec<_>>()
+            }
+        />
     };
 
     Either::Right(view! {
