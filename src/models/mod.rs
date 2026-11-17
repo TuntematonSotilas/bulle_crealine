@@ -7,6 +7,7 @@
 pub mod booking;
 pub mod catalogue;
 pub mod service;
+pub mod service_pdf;
 pub mod service_photo;
 pub mod session;
 pub mod studio;
@@ -21,6 +22,7 @@ pub use service::{
     SERVICE_ICONS, ServiceView, icon_label, is_valid_slug,
     section_prefix, section_title, slugify,
 };
+pub use service_pdf::{MAX_PDF_BYTES, MAX_PDF_LABEL, ServicePdfLink, is_pdf};
 pub use service_photo::{MAX_SERVICE_PHOTOS, ServicePhotoView};
 pub use session::{
     BookingOffer, HOME_CARD_DATES, HOME_CARDS, HOME_CARDS_MAX, SESSIONS_PER_CARD, SessionGroup,
