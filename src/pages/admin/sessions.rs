@@ -20,6 +20,7 @@ use crate::components::ui::select::{
 use crate::components::ui::table::*;
 use crate::models::SessionView;
 use crate::pages::admin::AdminShell;
+use crate::pages::admin::row_key;
 
 /// How many columns the listing has, so a panel slipped between two rows can span
 /// the width of it. Pinned against the header by a test.
@@ -161,12 +162,18 @@ fn SessionTable(
 
     let cancel = move || editing.set(Editing::None);
 
-    let body = rows
-        .into_iter()
-        .map(|session| {
-            view! { <SessionRows session=session editing=editing delete=delete on_cancel=cancel/> }
-        })
-        .collect::<Vec<_>>();
+    // Keyed rather than a `Vec`: a reload after a write shifts the rows, and see
+    // [`crate::pages::admin::row_key`] for what a positional diff did to their buttons.
+    let rows = StoredValue::new(rows);
+    let body = view! {
+        <For
+            each=move || rows.get_value()
+            key=row_key
+            children=move |session| {
+                view! { <SessionRows session=session editing=editing delete=delete on_cancel=cancel/> }
+            }
+        />
+    };
 
     Either::Right(view! {
         <TableContainer>

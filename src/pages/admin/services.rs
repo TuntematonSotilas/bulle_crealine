@@ -40,6 +40,7 @@ use crate::models::{
     ServicePhotoView, ServiceView, icon_label, section_title, slugify,
 };
 use crate::pages::admin::AdminShell;
+use crate::pages::admin::row_key;
 
 /// The action posting one photo, which an `<ActionForm>` could not carry.
 ///
@@ -189,12 +190,18 @@ fn ServiceTable(
 
     let cancel = move || editing.set(Editing::None);
 
-    let body = rows
-        .into_iter()
-        .map(|service| {
-            view! { <ServiceRows service=service editing=editing delete=delete on_cancel=cancel/> }
-        })
-        .collect::<Vec<_>>();
+    // Keyed rather than a `Vec`: a reload after a write shifts the rows, and see
+    // [`crate::pages::admin::row_key`] for what a positional diff did to their buttons.
+    let rows = StoredValue::new(rows);
+    let body = view! {
+        <For
+            each=move || rows.get_value()
+            key=row_key
+            children=move |service| {
+                view! { <ServiceRows service=service editing=editing delete=delete on_cancel=cancel/> }
+            }
+        />
+    };
 
     Either::Right(view! {
         <TableContainer>
@@ -880,36 +887,39 @@ fn PhotoGrid(photos: Vec<ServicePhotoView>, action: ServerAction<DeleteServicePh
         });
     }
 
-    let tiles = photos
-        .into_iter()
-        .map(|photo| {
-            let id = photo.id.clone();
+    // Keyed on the row's whole content, never diffed by position: see
+    // [`crate::pages::admin::row_key`].
+    let photos = StoredValue::new(photos);
+    let tile = move |photo: ServicePhotoView| {
+        let id = photo.id.clone();
 
-            view! {
-                <li class="flex flex-col gap-2">
-                    <img
-                        src=photo.url
-                        alt=photo.alt
-                        loading="lazy"
-                        class="object-cover w-full rounded-md border aspect-16/9"
-                    />
-                    // Dispatched rather than posted through an `<ActionForm>`: one
-                    // form per tile would be five more forms in this document, and
-                    // the upload above already makes this panel need JavaScript.
-                    <Button
-                        variant=ButtonVariant::Destructive
-                        size=ButtonSize::Sm
-                        attr:r#type="button"
-                        on:click=move |_| {
-                            action.dispatch(DeleteServicePhoto { id: id.clone() });
-                        }
-                    >
-                        "Supprimer"
-                    </Button>
-                </li>
-            }
-        })
-        .collect::<Vec<_>>();
+        view! {
+            <li class="flex flex-col gap-2">
+                <img
+                    src=photo.url
+                    alt=photo.alt
+                    loading="lazy"
+                    class="object-cover w-full rounded-md border aspect-16/9"
+                />
+                // Dispatched rather than posted through an `<ActionForm>`: one
+                // form per tile would be five more forms in this document, and
+                // the upload above already makes this panel need JavaScript.
+                <Button
+                    variant=ButtonVariant::Destructive
+                    size=ButtonSize::Sm
+                    attr:r#type="button"
+                    on:click=move |_| {
+                        action.dispatch(DeleteServicePhoto { id: id.clone() });
+                    }
+                >
+                    "Supprimer"
+                </Button>
+            </li>
+        }
+    };
+    let tiles = view! {
+        <For each=move || photos.get_value() key=row_key children=tile/>
+    };
 
     Either::Right(view! {
         <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{tiles}</ul>
