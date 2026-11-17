@@ -17,12 +17,16 @@ pub struct PhotoView {
     /// are drawn. A gallery of five `alt=""` images is the whole of what the page
     /// says to anyone reading it with their ears.
     pub alt: String,
+    /// Name of the theme the picture belongs to, which the catalogue groups the
+    /// pictures by. Empty for a workshop's own photos, which belong to no theme.
+    #[serde(default)]
+    pub theme: String,
 }
 
 /// One workshop's pictures, as the catalogue shows them.
 ///
 /// Where they come from depends on the workshop and is settled server-side, so the
-/// page draws one carousel either way:
+/// page draws one grid either way:
 ///
 /// - a bookable workshop shows the themes attached to it -- what it is about, run
 ///   after run, whether or not a date is on the calendar right now;
@@ -34,6 +38,6 @@ pub struct ServicePictures {
     /// a workshop, so this cannot go stale under a reworded label.
     pub service_slug: String,
     /// May be empty: a workshop with no theme and no photo yet is an ordinary
-    /// starting state, and the page simply draws no carousel.
+    /// starting state, and the page simply draws no grid.
     pub photos: Vec<PhotoView>,
 }

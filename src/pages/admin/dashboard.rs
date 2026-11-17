@@ -71,6 +71,20 @@ pub fn AdminPage() -> impl IntoView {
                     </CardContent>
                 </Card>
 
+                <Card>
+                    <CardHeader>
+                        <CardTitle>"QR code"</CardTitle>
+                        <CardDescription>
+                            "Générer un QR code à partir d'une adresse ou d'un texte, pour un flyer ou une affiche."
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <a href="/admin/qrcode" class="text-sm underline underline-offset-4">
+                            "Générer un QR code"
+                        </a>
+                    </CardContent>
+                </Card>
+
             </div>
         </AdminShell>
     }

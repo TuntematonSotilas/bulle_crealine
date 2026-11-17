@@ -1,7 +1,7 @@
 pub mod bookings;
 pub mod dashboard;
-pub mod easter_egg;
 pub mod login;
+pub mod qrcode;
 pub mod services;
 pub mod sessions;
 pub mod shell;
@@ -10,6 +10,7 @@ pub mod themes;
 pub use bookings::AdminBookingsPage;
 pub use dashboard::AdminPage;
 pub use login::AdminLoginPage;
+pub use qrcode::AdminQrCodePage;
 pub use services::AdminServicesPage;
 pub use sessions::AdminSessionsPage;
 pub use shell::AdminShell;

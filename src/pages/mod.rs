@@ -10,8 +10,8 @@ pub mod privacy_policy;
 pub mod moi_et_mon_atelier;
 
 pub use admin::{
-    AdminBookingsPage, AdminLoginPage, AdminPage, AdminServicesPage, AdminSessionsPage,
-    AdminThemesPage,
+    AdminBookingsPage, AdminLoginPage, AdminPage, AdminQrCodePage, AdminServicesPage,
+    AdminSessionsPage, AdminThemesPage,
 };
 pub use booking::BookingPage;
 pub use home::HomePage;

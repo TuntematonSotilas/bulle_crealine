@@ -2,11 +2,13 @@ use leptos::either::Either;
 use leptos::prelude::*;
 use leptos_router::hooks::{use_params_map, use_query_map};
 
+use crate::api::catalogue::service_themes;
 use crate::api::service_photos::service_photos;
 use crate::api::services::all_services;
 use crate::api::sessions::upcoming_offer;
 use crate::components::blocks::service_block::ServiceBlock;
 use crate::components::blocks::service_gallery::ServiceGallery;
+use crate::components::blocks::theme_gallery::ServiceThemes;
 use crate::components::blocks::upcoming_themes::{Showing, UpcomingThemes};
 use crate::components::seo::{PageMeta, clamp_description};
 use crate::models::group_by_theme;
@@ -45,6 +47,9 @@ pub fn ServicePage() -> impl IntoView {
     // same reason, and empty for a bookable workshop -- the server decides that,
     // not this page.
     let photos = Resource::new(slug, |slug| async move { service_photos(slug).await });
+
+    // Every theme of the workshop, dated or not. Created here for the same reason.
+    let themes = Resource::new(slug, |slug| async move { service_themes(slug).await });
 
     // Read once: it decides where the page opens, and from then on the visitor's
     // clicks do.
@@ -114,7 +119,19 @@ pub fn ServicePage() -> impl IntoView {
             })}
         </Transition>
 
-        // The third sibling, on the same terms as the second: an unknown slug and a
+        // Every theme on offer, after the dates: a visitor who came to book finds
+        // them first. Draws nothing for a workshop with no theme, which covers an
+        // unknown slug and a workshop run for structures alike.
+        <Transition fallback=|| ()>
+            {move || Suspend::new(async move {
+                themes
+                    .await
+                    .ok()
+                    .map(|photos| view! { <ServiceThemes photos=photos/> })
+            })}
+        </Transition>
+
+        // The last sibling, on the same terms as the second: an unknown slug and a
         // bookable workshop both come back with no photo, and the gallery draws
         // nothing on an empty list -- so this needs no condition of its own.
         <Transition fallback=|| ()>

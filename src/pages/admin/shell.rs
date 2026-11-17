@@ -2,19 +2,19 @@ use leptos::either::Either;
 use leptos::prelude::*;
 use leptos_router::components::Redirect;
 
-use crate::auth::{ADMIN_PATH, LOGIN_PATH, Logout, admin_email};
+use crate::auth::{LOGIN_PATH, Logout, admin_email};
 use crate::components::ui::button::{Button, ButtonSize, ButtonVariant};
-use crate::pages::admin::easter_egg::NavSprite;
 
 /// The admin pages, and the label shown in the shell's navigation.
 /// Ordered as the work runs: a theme is created, attached to a service, put on a
-/// session, and only then booked.
-const PAGES: [(&str, &str); 5] = [
+/// session, and only then booked. The QR code generator stands apart, at the end.
+const PAGES: [(&str, &str); 6] = [
     ("/admin", "Accueil"),
     ("/admin/themes", "Thèmes"),
     ("/admin/services", "Services"),
     ("/admin/sessions", "Séances"),
     ("/admin/bookings", "Réservations"),
+    ("/admin/qrcode", "QR code"),
 ];
 
 /// Frame shared by every admin page: navigation, the logged-in address, and the
@@ -74,9 +74,6 @@ fn Frame(
 ) -> impl IntoView {
     let logout = ServerAction::<Logout>::new();
 
-    // Read before the links borrow `current` below.
-    let on_dashboard = has_easter_egg(&current);
-
     let links = PAGES
         .into_iter()
         .map(|(path, label)| {
@@ -114,10 +111,8 @@ fn Frame(
                 </ActionForm>
             </div>
 
-            // `relative` so the easter egg below has something to pace along.
-            <nav class="flex relative flex-wrap gap-1 pb-2 border-b">
+            <nav class="flex flex-wrap gap-1 pb-2 border-b">
                 {links}
-                {on_dashboard.then(|| view! { <NavSprite/> })}
             </nav>
 
             {children()}
@@ -126,24 +121,10 @@ fn Frame(
     }
 }
 
-/// Whether a page carries the [`NavSprite`] easter egg: the dashboard, and only it.
-fn has_easter_egg(path: &str) -> bool {
-    path == ADMIN_PATH
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn only_the_dashboard_carries_the_easter_egg() {
-        assert!(has_easter_egg(ADMIN_PATH));
-
-        for (path, _) in PAGES.into_iter().filter(|(path, _)| *path != ADMIN_PATH) {
-            assert!(!has_easter_egg(path), "{path} should not carry it");
-        }
-        assert!(!has_easter_egg(LOGIN_PATH), "nor the login page");
-    }
+    use crate::auth::ADMIN_PATH;
 
     /// Every navigation entry has to be a page that exists, or the shell would link
     /// into the router's fallback.

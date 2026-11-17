@@ -2,7 +2,21 @@
 
 use leptos::prelude::*;
 
-use crate::models::ServicePictures;
+use crate::models::{PhotoView, ServicePdfLink, ServicePictures};
+
+/// A bookable workshop's themes as pictures, in the order storage lists them.
+#[cfg(feature = "ssr")]
+fn theme_pictures(themes: &[crate::db::theme::ThemeSummaryDoc], slug: &str) -> Vec<PhotoView> {
+    themes
+        .iter()
+        .filter(|found| found.service_slug == slug)
+        .map(|found| PhotoView {
+            url: found.photo_url(),
+            alt: format!("Thème : {}", found.name),
+            theme: found.name.clone(),
+        })
+        .collect()
+}
 
 /// The pictures every workshop shows in the catalogue, one entry per workshop.
 ///
@@ -26,7 +40,7 @@ use crate::models::ServicePictures;
 pub async fn catalogue_photos() -> Result<Vec<ServicePictures>, ServerFnError> {
     use crate::api::log_failure;
     use crate::db::{service, service_photo, theme};
-    use crate::models::{MAX_SERVICE_PHOTOS, PhotoView};
+    use crate::models::MAX_SERVICE_PHOTOS;
 
     let services = service::list_all()
         .await
@@ -59,20 +73,53 @@ pub async fn catalogue_photos() -> Result<Vec<ServicePictures>, ServerFnError> {
                         // It says which workshop and which of its pictures, which is
                         // all there is to say truthfully.
                         alt: format!("{} — photo {}", workshop.label, rank + 1),
+                        theme: String::new(),
                     })
                     .collect()
             } else {
-                themes
-                    .iter()
-                    .filter(|found| found.service_slug == workshop.slug)
-                    .map(|found| PhotoView {
-                        url: found.photo_url(),
-                        alt: format!("Thème : {}", found.name),
-                    })
-                    .collect()
+                theme_pictures(&themes, &workshop.slug)
             };
 
             ServicePictures { service_slug: workshop.slug, photos: pictures }
         })
+        .collect())
+}
+
+/// Every theme of one workshop, for the "Les thèmes" section of its page.
+///
+/// Whether or not a date is on the calendar: the page's schedule already lists the
+/// themes that have one, and this is the rest of what is on offer. Empty for an
+/// unknown slug, and for a workshop run for structures, which has no themes.
+///
+/// Open to everyone, like [`catalogue_photos`], which already shows the same
+/// pictures.
+#[server]
+pub async fn service_themes(service: String) -> Result<Vec<PhotoView>, ServerFnError> {
+    use crate::api::log_failure;
+    use crate::db::theme;
+
+    let themes = theme::list_all()
+        .await
+        .map_err(|error| log_failure("listing the themes of a workshop", error))?;
+
+    Ok(theme_pictures(&themes, service.trim()))
+}
+
+/// Every workshop's PDF, one entry per workshop that has one.
+///
+/// One read for the whole page, the catalogue listing every workshop at once. Open
+/// to everyone: the files are what the catalogue links to.
+#[server]
+pub async fn catalogue_pdfs() -> Result<Vec<ServicePdfLink>, ServerFnError> {
+    use crate::api::log_failure;
+    use crate::db::service_pdf;
+
+    let pdfs = service_pdf::list_all()
+        .await
+        .map_err(|error| log_failure("listing the PDFs of the catalogue", error))?;
+
+    Ok(pdfs
+        .into_iter()
+        .map(|pdf| ServicePdfLink { url: pdf.pdf_url(), service_slug: pdf.service_slug })
         .collect())
 }

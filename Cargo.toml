@@ -32,6 +32,7 @@ tw_merge = { version = "0.1.21", features = ["variant"] }
 icons = { version = "0.18.2", features = ["leptos"] }
 strum = "0.28.0"
 time = { version = "0.3.55", features = ["wasm-bindgen"] }
+qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 
 [features]
 csr = ["leptos/csr"]

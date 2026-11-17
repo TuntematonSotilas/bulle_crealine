@@ -66,8 +66,8 @@ Les deux dernières se génèrent d'un coup :
 En local (.bashrc) :
 
     export ADMIN_EMAIL="vous@exemple.fr"
-    export ADMIN_SESSION_SECRET="<secret>"
     export ADMIN_PASSWORD_HASH="<hash>"
+    export ADMIN_SESSION_SECRET="<secret>"
 
 ### Fonctionnement
 

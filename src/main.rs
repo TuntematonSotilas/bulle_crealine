@@ -83,7 +83,9 @@ async fn main() -> std::io::Result<()> {
             .route("/media/theme/{id}", web::get().to(media::theme_photo))
             // the same, for the photos of a workshop run for a structure
             .route("/media/service-photo/{id}", web::get().to(media::service_photo))
-            // photo uploads do not fit under actix's 256 kB default body limit
+            // and for the PDF each workshop offers from the catalogue
+            .route("/media/service-pdf/{id}", web::get().to(media::service_pdf))
+            // photo and PDF uploads do not fit under actix's 256 kB default body limit
             .app_data(web::PayloadConfig::new(media::MAX_BODY_BYTES))
             .leptos_routes(routes, {
                 let leptos_options = leptos_options.clone();

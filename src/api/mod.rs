@@ -6,6 +6,7 @@
 
 pub mod bookings;
 pub mod catalogue;
+pub mod service_pdfs;
 pub mod service_photos;
 pub mod services;
 pub mod sessions;

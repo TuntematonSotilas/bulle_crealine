@@ -3,18 +3,27 @@
 //! Theme photos live in their document rather than on disk (see
 //! [`crate::db::theme`]), so they need a route of their own; an `<img src>` cannot
 //! call a server function. Workshop photos live in a collection of their own (see
-//! [`crate::db::service_photo`]) and are served the same way.
+//! [`crate::db::service_photo`]) and are served the same way, as are the workshop
+//! PDFs (see [`crate::db::service_pdf`]).
 
 use actix_web::http::header;
 use actix_web::{HttpResponse, web};
 
 /// How much of a request body the server accepts.
 ///
-/// Actix defaults to 256 kB, which no photo would fit under. The real cap is
-/// enforced while reading the upload — this only has to be wide enough not to cut
-/// a legitimate one short, hence the room left for the other fields and the
-/// multipart boundaries.
-pub const MAX_BODY_BYTES: usize = crate::models::MAX_PHOTO_BYTES + 64 * 1024;
+/// Actix defaults to 256 kB, which no photo would fit under. The real caps are
+/// enforced while reading each upload — this only has to be wide enough not to cut
+/// the largest legitimate one short, hence the room left for the other fields and
+/// the multipart boundaries.
+pub const MAX_BODY_BYTES: usize = largest_upload() + 64 * 1024;
+
+/// The larger of the two files an admin can send: a photo or a PDF.
+const fn largest_upload() -> usize {
+    let photo = crate::models::MAX_PHOTO_BYTES;
+    let pdf = crate::models::MAX_PDF_BYTES;
+
+    if photo > pdf { photo } else { pdf }
+}
 
 /// `GET /media/theme/{id}` — one theme's photo.
 ///
@@ -63,6 +72,38 @@ pub async fn service_photo(id: web::Path<String>) -> HttpResponse {
         Ok(None) => HttpResponse::NotFound().finish(),
         Err(error) => {
             eprintln!("serving a workshop photo failed: {error}");
+            HttpResponse::ServiceUnavailable().finish()
+        }
+    }
+}
+
+/// `GET /media/service-pdf/{id}` — the PDF a workshop offers from the catalogue.
+///
+/// `inline`, so the browser opens it in its own reader rather than saving it; the
+/// file name is what that reader offers when the visitor does save it. Cached like
+/// a workshop photo, for the same reason: the document behind an id is never
+/// rewritten.
+pub async fn service_pdf(id: web::Path<String>) -> HttpResponse {
+    use crate::db::{service_pdf, session};
+
+    let Ok(pdf_id) = session::parse_id(&id) else {
+        return HttpResponse::NotFound().finish();
+    };
+
+    match service_pdf::pdf(pdf_id).await {
+        Ok(Some((bytes, slug))) => HttpResponse::Ok()
+            .content_type("application/pdf")
+            // The slug is safe inside the quotes: `is_valid_slug` allows only
+            // lowercase letters, digits and hyphens.
+            .insert_header((
+                header::CONTENT_DISPOSITION,
+                format!("inline; filename=\"{slug}.pdf\""),
+            ))
+            .insert_header((header::CACHE_CONTROL, "public, max-age=31536000, immutable"))
+            .body(bytes),
+        Ok(None) => HttpResponse::NotFound().finish(),
+        Err(error) => {
+            eprintln!("serving a workshop PDF failed: {error}");
             HttpResponse::ServiceUnavailable().finish()
         }
     }

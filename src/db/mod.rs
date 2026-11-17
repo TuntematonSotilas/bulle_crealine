@@ -11,6 +11,7 @@
 pub mod booking;
 pub mod datetime;
 pub mod service;
+pub mod service_pdf;
 pub mod service_photo;
 pub mod session;
 pub mod theme;
@@ -24,6 +25,7 @@ use mongodb::{Client, Collection, Database, IndexModel, bson::doc};
 
 use crate::db::booking::BookingDoc;
 use crate::db::service::ServiceDoc;
+use crate::db::service_pdf::ServicePdfDoc;
 use crate::db::service_photo::ServicePhotoDoc;
 use crate::db::session::SessionDoc;
 use crate::db::theme::ThemeDoc;
@@ -48,6 +50,9 @@ const SERVICES: &str = "services";
 /// A collection of its own rather than a field on the workshop: five images would
 /// not fit under Mongo's document ceiling. See [`crate::db::service_photo`].
 const SERVICE_PHOTOS: &str = "service_photos";
+
+/// The PDF each workshop offers from the catalogue. See [`crate::db::service_pdf`].
+const SERVICE_PDFS: &str = "service_pdfs";
 
 /// Unique index over the live bookings of one session, keyed by phone number.
 const ACTIVE_BOOKING_INDEX: &str = "session_id_1_phone_key_1_active";
@@ -182,6 +187,13 @@ pub fn service_photos() -> Result<Collection<ServicePhotoDoc>, DbError> {
         .collection(SERVICE_PHOTOS))
 }
 
+/// The workshop PDFs collection, or [`DbError::NotConfigured`].
+pub fn service_pdfs() -> Result<Collection<ServicePdfDoc>, DbError> {
+    Ok(get()
+        .ok_or(DbError::NotConfigured)?
+        .collection(SERVICE_PDFS))
+}
+
 /// Creates the indexes the queries rely on.
 ///
 /// Creating an index that already exists with the same shape is a no-op, so this
@@ -192,6 +204,7 @@ async fn ensure_indexes(database: &Database) -> Result<(), DbError> {
     let themes: Collection<ThemeDoc> = database.collection(THEMES);
     let services: Collection<ServiceDoc> = database.collection(SERVICES);
     let service_photos: Collection<ServicePhotoDoc> = database.collection(SERVICE_PHOTOS);
+    let service_pdfs: Collection<ServicePdfDoc> = database.collection(SERVICE_PDFS);
 
     // The slug is a workshop's identity: it is what sessions and bookings store,
     // and what resolves `/services/<slug>` and `/booking/<slug>`. Two workshops
@@ -223,6 +236,18 @@ async fn ensure_indexes(database: &Database) -> Result<(), DbError> {
         .create_index(
             IndexModel::builder()
                 .keys(doc! { "service_slug": 1, "uploaded_at": 1 })
+                .build(),
+        )
+        .await?;
+
+    // One PDF per workshop, and the lookup by slug that the admin panel and the
+    // replacement make. Unique so that two uploads racing each other cannot leave a
+    // workshop with two files, one of them unreachable.
+    service_pdfs
+        .create_index(
+            IndexModel::builder()
+                .keys(doc! { "service_slug": 1 })
+                .options(IndexOptions::builder().unique(true).build())
                 .build(),
         )
         .await?;

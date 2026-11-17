@@ -167,7 +167,7 @@ pub async fn save_service(
 /// have a life of their own, and a session whose workshop is gone loses its name on
 /// the home page, in the admin table and on the booking page at once.
 ///
-/// Photos are the exception, and go with the workshop. One has no identity apart
+/// Photos and the PDF are the exception, and go with the workshop. One has no identity apart
 /// from the page it illustrates, and becomes unreachable the moment that page does:
 /// refusing would only ask the admin to empty a gallery by hand before deleting the
 /// thing the gallery was for.
@@ -175,7 +175,7 @@ pub async fn save_service(
 pub async fn delete_service(id: String) -> Result<(), ServerFnError> {
     use crate::api::log_failure;
     use crate::auth::require_admin;
-    use crate::db::{service, service_photo, session, theme};
+    use crate::db::{service, service_pdf, service_photo, session, theme};
 
     require_admin()?;
 
@@ -215,6 +215,10 @@ pub async fn delete_service(id: String) -> Result<(), ServerFnError> {
     service_photo::delete_for_service(&found.slug)
         .await
         .map_err(|error| log_failure("deleting the photos of a workshop", error))?;
+    // The PDF too, for the same reason: it describes this workshop and nothing else.
+    service_pdf::delete_for_service(&found.slug)
+        .await
+        .map_err(|error| log_failure("deleting the PDF of a workshop", error))?;
 
     service::delete(service_id)
         .await

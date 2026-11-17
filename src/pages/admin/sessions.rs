@@ -21,6 +21,10 @@ use crate::components::ui::table::*;
 use crate::models::SessionView;
 use crate::pages::admin::AdminShell;
 
+/// How many columns the listing has, so a panel slipped between two rows can span
+/// the width of it. Pinned against the header by a test.
+const COLUMNS: &str = "6";
+
 /// What the admin is doing to the session list right now.
 #[derive(Clone, Debug, PartialEq)]
 enum Editing {
@@ -70,45 +74,22 @@ pub fn AdminSessionsPage() -> impl IntoView {
             .and_then(|outcome| outcome.err())
             .map(|error| user_message(&error))
     };
-    let delete_error = move || {
-        delete
-            .value()
-            .get()
-            .and_then(|outcome| outcome.err())
-            .map(|error| user_message(&error))
-    };
 
     view! {
         <Title text="Séances — Administration"/>
 
         <AdminShell title="Séances" current="/admin/sessions">
 
-            {move || {
-                delete_error()
-                    .map(|message| {
-                        view! { <Alert variant=AlertVariant::Destructive>{message}</Alert> }
-                    })
-            }}
-
+            // A deletion is not one of these branches: its confirmation opens inside
+            // the table, under the row it concerns, as on the themes page.
             {move || match editing.get() {
-                Editing::None => {
-                    EitherOf3::A(
-                        view! {
-                            <div>
-                                <Button on:click=move |_| editing.set(Editing::New)>
-                                    "Nouvelle séance"
-                                </Button>
-                            </div>
-                        },
-                    )
-                }
                 Editing::New | Editing::Session(_) => {
                     let session = match editing.get() {
                         Editing::Session(session) => Some(session),
                         _ => None,
                     };
 
-                    EitherOf3::B(
+                    Either::Left(
                         view! {
                             <SessionForm
                                 action=save
@@ -119,14 +100,14 @@ pub fn AdminSessionsPage() -> impl IntoView {
                         },
                     )
                 }
-                Editing::Deleting(session) => {
-                    EitherOf3::C(
+                Editing::None | Editing::Deleting(_) => {
+                    Either::Right(
                         view! {
-                            <DeleteConfirmation
-                                action=delete
-                                session=session
-                                on_cancel=cancel
-                            />
+                            <div>
+                                <Button on:click=move |_| editing.set(Editing::New)>
+                                    "Nouvelle séance"
+                                </Button>
+                            </div>
                         },
                     )
                 }
@@ -146,7 +127,11 @@ pub fn AdminSessionsPage() -> impl IntoView {
                                 },
                             )
                         }
-                        Ok(rows) => Either::Right(view! { <SessionTable rows=rows editing=editing/> }),
+                        Ok(rows) => {
+                            Either::Right(
+                                view! { <SessionTable rows=rows editing=editing delete=delete/> },
+                            )
+                        }
                     }
                 })}
             </Transition>
@@ -157,7 +142,12 @@ pub fn AdminSessionsPage() -> impl IntoView {
 
 /// The listing itself.
 #[component]
-fn SessionTable(rows: Vec<SessionView>, editing: RwSignal<Editing>) -> impl IntoView {
+fn SessionTable(
+    rows: Vec<SessionView>,
+    editing: RwSignal<Editing>,
+    /// Carried down to the confirmation, which opens between two rows.
+    delete: ServerAction<DeleteSession>,
+) -> impl IntoView {
     if rows.is_empty() {
         return Either::Left(view! {
             <Alert>
@@ -169,48 +159,12 @@ fn SessionTable(rows: Vec<SessionView>, editing: RwSignal<Editing>) -> impl Into
         });
     }
 
+    let cancel = move || editing.set(Editing::None);
+
     let body = rows
         .into_iter()
         .map(|session| {
-            let for_edit = session.clone();
-            let for_delete = session.clone();
-
-            // Read out of `session` before the closures below capture it.
-            let date_label = session.date_label.clone();
-            let service_label = session.service_label.clone();
-            let theme = session.theme_name.clone();
-            let price_label = session.price_label();
-            let capacity = format!("{} / {}", session.booked_persons, session.max_persons);
-
-            view! {
-                <TableRow>
-                    <TableCell class="font-medium">{date_label}</TableCell>
-                    <TableCell>{service_label}</TableCell>
-                    <TableCell>{theme}</TableCell>
-                    <TableCell class="whitespace-nowrap">{price_label}</TableCell>
-                    <TableCell class="whitespace-nowrap">{capacity}</TableCell>
-                    <TableCell>
-                        <div class="flex gap-2 justify-end">
-                            <Button
-                                variant=ButtonVariant::Outline
-                                size=ButtonSize::Sm
-                                on:click=move |_| editing.set(Editing::Session(for_edit.clone()))
-                            >
-                                "Modifier"
-                            </Button>
-                            <Button
-                                variant=ButtonVariant::Destructive
-                                size=ButtonSize::Sm
-                                on:click=move |_| {
-                                    editing.set(Editing::Deleting(for_delete.clone()))
-                                }
-                            >
-                                "Supprimer"
-                            </Button>
-                        </div>
-                    </TableCell>
-                </TableRow>
-            }
+            view! { <SessionRows session=session editing=editing delete=delete on_cancel=cancel/> }
         })
         .collect::<Vec<_>>();
 
@@ -231,6 +185,85 @@ fn SessionTable(rows: Vec<SessionView>, editing: RwSignal<Editing>) -> impl Into
             </Table>
         </TableContainer>
     })
+}
+
+/// One session's row, and the deletion panel beneath it when it is the one going.
+#[component]
+fn SessionRows(
+    session: SessionView,
+    editing: RwSignal<Editing>,
+    delete: ServerAction<DeleteSession>,
+    on_cancel: impl Fn() + 'static + Send + Sync + Copy,
+) -> impl IntoView {
+    let id = session.id.clone();
+    // Held because the closure below re-runs on every change to `editing` and needs
+    // its own copy each time.
+    let dropping = StoredValue::new(session.clone());
+
+    view! {
+        <SessionRow session=session editing=editing/>
+
+        {move || {
+            let id = id.clone();
+
+            matches!(editing.get(), Editing::Deleting(ref chosen) if chosen.id == id)
+                .then(|| {
+                    view! {
+                        <TableRow>
+                            <TableCell attr:colspan=COLUMNS>
+                                <DeleteConfirmation
+                                    action=delete
+                                    session=dropping.get_value()
+                                    on_cancel=on_cancel
+                                />
+                            </TableCell>
+                        </TableRow>
+                    }
+                })
+        }}
+    }
+}
+
+/// One session in the listing.
+#[component]
+fn SessionRow(session: SessionView, editing: RwSignal<Editing>) -> impl IntoView {
+    let for_edit = session.clone();
+    let for_delete = session.clone();
+
+    // Read out of `session` before the closures below capture it.
+    let date_label = session.date_label.clone();
+    let service_label = session.service_label.clone();
+    let theme = session.theme_name.clone();
+    let price_label = session.price_label();
+    let capacity = format!("{} / {}", session.booked_persons, session.max_persons);
+
+    view! {
+        <TableRow>
+            <TableCell class="font-medium">{date_label}</TableCell>
+            <TableCell>{service_label}</TableCell>
+            <TableCell>{theme}</TableCell>
+            <TableCell class="whitespace-nowrap">{price_label}</TableCell>
+            <TableCell class="whitespace-nowrap">{capacity}</TableCell>
+            <TableCell>
+                <div class="flex gap-2 justify-end">
+                    <Button
+                        variant=ButtonVariant::Outline
+                        size=ButtonSize::Sm
+                        on:click=move |_| editing.set(Editing::Session(for_edit.clone()))
+                    >
+                        "Modifier"
+                    </Button>
+                    <Button
+                        variant=ButtonVariant::Destructive
+                        size=ButtonSize::Sm
+                        on:click=move |_| editing.set(Editing::Deleting(for_delete.clone()))
+                    >
+                        "Supprimer"
+                    </Button>
+                </div>
+            </TableCell>
+        </TableRow>
+    }
 }
 
 /// Create or edit form. `session` being `None` means a creation.
@@ -553,21 +586,30 @@ fn DeleteConfirmation(
 ) -> impl IntoView {
     let id = session.id.clone();
 
-    view! {
-        <Card>
-            <CardHeader>
-                <CardTitle>"Supprimer cette séance ?"</CardTitle>
-                <CardDescription>
-                    {format!(
-                        "{} · {} · {}",
-                        session.date_label,
-                        session.service_label,
-                        session.theme_name,
-                    )}
-                </CardDescription>
-            </CardHeader>
+    // Reported here rather than at the top of the page, where the admin is no
+    // longer looking: a refusal belongs beside the button that drew it.
+    let failure = move || {
+        action
+            .value()
+            .get()
+            .and_then(|outcome| outcome.err())
+            .map(|error| user_message(&error))
+    };
 
-            <CardContent>
+    // Neither scrolled to nor focused: this panel opens in the row right under the
+    // button that asked for it, already in view.
+    view! {
+        <div class="p-4 rounded-md border border-border bg-surface">
+            <p class="font-medium">
+                {format!(
+                    "Supprimer la séance du {} ({}, {}) ?",
+                    session.date_label,
+                    session.service_label,
+                    session.theme_name,
+                )}
+            </p>
+
+            <div class="mt-3">
                 <AffectedBookings session_id=id.clone()/>
 
                 <ActionForm action=action>
@@ -585,8 +627,19 @@ fn DeleteConfirmation(
                         </Button>
                     </div>
                 </ActionForm>
-            </CardContent>
-        </Card>
+            </div>
+
+            {move || {
+                failure()
+                    .map(|message| {
+                        view! {
+                            <Alert variant=AlertVariant::Destructive class="mt-3">
+                                {message}
+                            </Alert>
+                        }
+                    })
+            }}
+        </div>
     }
 }
 
@@ -671,6 +724,95 @@ fn AffectedBookings(session_id: String) -> impl IntoView {
 #[cfg(all(test, feature = "ssr"))]
 mod tests {
     use super::*;
+
+    fn session() -> SessionView {
+        SessionView {
+            id: "651d1f0a0000000000000001".to_owned(),
+            service_slug: "aperos-creatifs".to_owned(),
+            service_label: "Apéros créatifs".to_owned(),
+            service_description: String::new(),
+            service_path: "/services/aperos-creatifs".to_owned(),
+            date_label: "dimanche 5 juillet 2026 à 14h00".to_owned(),
+            date_input: "2026-07-05T14:00".to_owned(),
+            theme_id: "651d1f0a00000000000000aa".to_owned(),
+            theme_name: "Aquarelle".to_owned(),
+            photo_url: String::new(),
+            price: 35.0,
+            max_persons: 8,
+            booked_persons: 2,
+            min_persons: 1,
+        }
+    }
+
+    /// A second session, to tell which row a panel opened under.
+    fn other() -> SessionView {
+        SessionView {
+            id: "651d1f0a0000000000000002".to_owned(),
+            date_label: "lundi 6 juillet 2026 à 10h00".to_owned(),
+            date_input: "2026-07-06T10:00".to_owned(),
+            ..session()
+        }
+    }
+
+    /// What only the deletion panel says.
+    const CONFIRMATION: &str = "Supprimer la séance du";
+
+    fn table_html(rows: Vec<SessionView>) -> String {
+        table_html_while(rows, Editing::None)
+    }
+
+    /// The table as it renders while the admin is in the middle of something, which
+    /// is what puts a deletion panel between two rows.
+    fn table_html_while(rows: Vec<SessionView>, editing: Editing) -> String {
+        // A deletion panel owns a `Resource`, and nothing else in this table does.
+        crate::pages::admin::init_test_executor();
+
+        Owner::new().with(|| {
+            let editing = RwSignal::new(editing);
+            let delete = ServerAction::<DeleteSession>::new();
+            view! { <SessionTable rows=rows editing=editing delete=delete/> }.to_html()
+        })
+    }
+
+    /// Where in the string `needle` sits, so the order of two things in the rendered
+    /// markup can be asserted.
+    fn at(html: &str, needle: &str) -> usize {
+        html.find(needle)
+            .unwrap_or_else(|| panic!("{needle} is missing: {html}"))
+    }
+
+    #[test]
+    fn the_confirmation_opens_under_the_row_it_concerns() {
+        let html = table_html_while(vec![session(), other()], Editing::Deleting(session()));
+
+        assert_eq!(html.matches(CONFIRMATION).count(), 1, "not exactly one: {html}");
+        assert!(
+            at(&html, "dimanche 5 juillet") < at(&html, CONFIRMATION),
+            "the panel should follow its row: {html}"
+        );
+        assert!(
+            at(&html, CONFIRMATION) < at(&html, "lundi 6 juillet"),
+            "and come before the next one: {html}"
+        );
+    }
+
+    #[test]
+    fn a_table_nobody_is_deleting_from_carries_none() {
+        let html = table_html(vec![session(), other()]);
+
+        assert!(!html.contains(CONFIRMATION), "nothing should be asked: {html}");
+    }
+
+    /// A column added to the header without touching `COLUMNS` would box the panel
+    /// into part of the width, which nothing else would catch.
+    #[test]
+    fn the_confirmation_spans_every_column() {
+        let html = table_html_while(vec![session()], Editing::Deleting(session()));
+
+        let columns = html.matches(r#"data-name="TableHead""#).count();
+        assert_eq!(COLUMNS, columns.to_string(), "the panel spans {COLUMNS} of {columns}: {html}");
+        assert!(html.contains(&format!(r#"colspan="{COLUMNS}""#)), "{html}");
+    }
 
     /// The workshop and theme dropdowns are both fetched now, so what a test can
     /// see of this form is the fields around them -- and that they are there at all
